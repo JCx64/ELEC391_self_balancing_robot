@@ -1,10 +1,10 @@
 # ELEC391_self_balancing_robot
 ## Authors
-J.Chen  contact:chenjaiyi2022@126.com 
+J.Chen&nbsp;  contact: chenjaiyi2022@126.com 
 
-H.Chen  contact:
+H.Chen  contact: 
 
-A.Su    contact:
+A.Su &nbsp;&nbsp;&nbsp; contact: su18124968042@163.com
 ## Time (YY/MM/DD)
 2025/1/8 - Now
 ## Location
