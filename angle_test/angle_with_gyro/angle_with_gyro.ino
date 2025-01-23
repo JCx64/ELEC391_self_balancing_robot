@@ -29,10 +29,17 @@ void loop() {
     sample_time = (now_time - prev_time)/1000.0;
 
     //calculate tilt_angle based on sample_time and previous tilt_angle
-    tilt_angle = theta_zero + z*sample_time;
+    tilt_angle = theta_zero + x*sample_time;
 
     //send tilt angle (to be plotted)
     Serial.println(tilt_angle);
+
+    // Serial.print("x: ");
+    // Serial.println(x);
+    // Serial.print("y: ");
+    // Serial.println(y);
+    // Serial.print("z: ");
+    // Serial.println(z);
     
     //update previous_time and theta_zero
     prev_time = now_time;
