@@ -1,5 +1,5 @@
 #@team: ELEC391 B2
-#@author: Jiayi Chen
+#@author: Jiayi Chen, Huiyu Chen
 #@description: To plot the calculated tilt angle using data measured by accelerometer and gyroscope.
 #@date: 2025/1/17
 #@note: Arduino code use angle_with_acc_gyro.ino
@@ -11,7 +11,7 @@ import serial
 def serial_init():
     # configure the serial port
     ser = serial.Serial(
-        port='COM8', #change this COM port # according to your PC
+        port='COM13', #change this COM port # according to your PC
         baudrate=9600,
         parity=serial.PARITY_NONE,
         stopbits=serial.STOPBITS_TWO,
