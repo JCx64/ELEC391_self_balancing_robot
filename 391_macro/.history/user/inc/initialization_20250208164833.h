@@ -1,0 +1,19 @@
+/**
+ * @file set_pwm.h
+ * @author Jiayi Chen
+ * @brief Set left wheel and right wheel pwm (mapping to -100~100)
+ * @date 2025/02/07
+ *
+ * @copyright UBC ELEC391 2024-2025 Winter Term 2 Team B2
+ *
+ */
+
+#include "Arduino_BMI270_BMM150.h"
+#include "NRF52_MBED_TimerInterrupt.h"
+#include "angle_measurement.h"
+#include "pid_alg"
+
+#define TIMER_INTERVAL_MS 2000
+
+void init_imu();
+void init_timer();

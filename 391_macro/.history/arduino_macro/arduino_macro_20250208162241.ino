@@ -1,0 +1,14 @@
+/**
+ * @file arduino_macro.ino
+ * @author Jiayi Chen, Huiyu Chen, Jinke Su
+ * @brief arduino code for ELEC391, self-balancing robot
+ * @date 2025/02/08
+ *
+ * @copyright UBC ELEC391 2024-2025 Winter Term 2 Team B2
+ *
+ */
+
+#include 
+void setup() {
+
+}
