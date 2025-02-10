@@ -8,9 +8,9 @@
  *
  */
 
-#include "./user/inc/initialization.h"
-#include "./user/inc/angle_measurement.h"
-#include "./user/inc/pid_alg.h"
+#include "/user/inc/initialization.h"
+#include "/user/inc/angle_measurement.h"
+#include "/user/inc/pid_alg.h"
 #include "./user/inc/set_pwm.h"
 
 class_initialization initial_lib;

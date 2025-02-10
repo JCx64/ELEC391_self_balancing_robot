@@ -16,6 +16,7 @@ class_pid::class_pid(){
 }
 
 class_angle angle_update;
+class_pid pid_feeder;
 
 /**
  * @brief set k_p value
@@ -77,31 +78,31 @@ void class_pid::pid_TimerElapsedCallback(){
     angle_update.get_comp_filter_angle();
 
     //update error and sum error
-    angle_error = angle_target - angle.comp_filter_angle;
-    sum_error += angle_error;
+    pid_feeder.angle_error = angle_target - angle.comp_filter_angle;
+    pid_feeder.sum_error += pid_feeder.angle_error;
 
     //calculate output for kp
-    kp_out = angle_error * pid.k_p;
+    pid_feeder.kp_out = pid_feeder.angle_error * pid.k_p;
 
     //calculate output for ki, consider integral limit
-    if(abs(ki_out) > pid.integral_max){
-        if(ki_out > 0){
-            ki_out = pid.integral_max;
+    if(abs(pid_feeder.ki_out) > pid.integral_max){
+        if(pid_feeder.ki_out > 0){
+            pid_feeder.ki_out = pid.integral_max;
         }else{
-            ki_out = -pid.integral_max;
+            pid_feeder.ki_out = -pid.integral_max;
         }
     }else{
-        ki_out = sum_error * pid.k_i;
+        pid_feeder.ki_out = pid_feeder.sum_error * pid.k_i;
     }
 
     //calculate output for kd
-    kd_out = (prev_error - angle_error) * pid.k_d;
+    pid_feeder.kd_out = (pid_feeder.prev_error - pid_feeder.angle_error) * pid.k_d;
 
     //calculate pid output
-    pid.output = kp_out + ki_out + kd_out;
+    pid.output = pid_feeder.kp_out + pid_feeder.ki_out + pid_feeder.kd_out;
 
     //update previous error
-    prev_error = angle_error;
+    pid_feeder.prev_error = pid_feeder.angle_error;
 
     return;
 }
