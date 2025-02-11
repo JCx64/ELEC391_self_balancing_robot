@@ -8,7 +8,8 @@
  *
  */
 
-#include <set_pwm.h>
+#include "set_pwm.h>
+#include <arduino.json>
 
 class_pwm pwm_feeder;
 
