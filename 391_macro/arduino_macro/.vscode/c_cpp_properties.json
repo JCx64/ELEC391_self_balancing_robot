@@ -2,28 +2,49 @@
     "version": 4,
     "configurations": [
         {
+            "name": "Win32",
+            "compilerPath": "",
+            "compilerArgs": [],
+            "intelliSenseMode": "windows-gcc-x64",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "H:/Code/ELEC391/ELEC391_self_balancing_robot/391_macro/arduino_macro/user/src",
+                "H:/Code/ELEC391/ELEC391_self_balancing_robot/391_macro/arduino_macro/user/inc",
+                "D:/Arduino/libraries"
+            ],
+            "forcedInclude": [],
+            "cStandard": "c17",
+            "cppStandard": "gnu++14",
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE"
+            ]
+        },
+        {
             "name": "Arduino",
-            "compilerPath": "C:\\Users\\Jackie_Chen\\AppData\\Local\\Arduino15\\packages\\arduino\\tools\\avr-gcc\\7.3.0-atmel3.6.1-arduino7\\bin\\avr-g++",
+            "compilerPath": "C:\\Users\\JK\\AppData\\Local\\Arduino15\\packages\\arduino\\tools\\arm-none-eabi-gcc\\7-2017q4\\bin\\arm-none-eabi-g++",
             "compilerArgs": [
                 "-nostdlib"
             ],
             "intelliSenseMode": "gcc-x64",
             "includePath": [
-                "C:\\Users\\Jackie_Chen\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed\\3.3.0\\cores\\arduino",
-                "C:\\Users\\Jackie_Chen\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed\\3.3.0\\variants\\ARDUINO_NANO33BLE",
-                "C:\\Users\\Jackie_Chen\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed\\3.3.0\\cores\\arduino\\api\\deprecated",
-                "C:\\Users\\Jackie_Chen\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed\\3.3.0\\cores\\arduino\\api\\deprecated-avr-comp",
-                "c:\\users\\jackie_chen\\appdata\\local\\arduino15\\packages\\arduino\\tools\\arm-none-eabi-gcc\\7-2017q4\\arm-none-eabi\\include\\c++\\7.2.1",
-                "c:\\users\\jackie_chen\\appdata\\local\\arduino15\\packages\\arduino\\tools\\arm-none-eabi-gcc\\7-2017q4\\arm-none-eabi\\include\\c++\\7.2.1\\arm-none-eabi",
-                "c:\\users\\jackie_chen\\appdata\\local\\arduino15\\packages\\arduino\\tools\\arm-none-eabi-gcc\\7-2017q4\\arm-none-eabi\\include\\c++\\7.2.1\\backward",
-                "c:\\users\\jackie_chen\\appdata\\local\\arduino15\\packages\\arduino\\tools\\arm-none-eabi-gcc\\7-2017q4\\lib\\gcc\\arm-none-eabi\\7.2.1\\include",
-                "c:\\users\\jackie_chen\\appdata\\local\\arduino15\\packages\\arduino\\tools\\arm-none-eabi-gcc\\7-2017q4\\lib\\gcc\\arm-none-eabi\\7.2.1\\include-fixed",
-                "c:\\users\\jackie_chen\\appdata\\local\\arduino15\\packages\\arduino\\tools\\arm-none-eabi-gcc\\7-2017q4\\arm-none-eabi\\include",
-                "${workspaceFolder}/user/inc",
-                "C:/Users/Jackie_Chen/AppData/Local/Arduino15/packages/arduino/hardware/mbed/3.3.0/cores/arduino/mbed/hal/tests/pinvalidate/test_files"
+                "C:\\Users\\JK\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_nano\\4.2.1\\cores\\arduino",
+                "C:\\Users\\JK\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_nano\\4.2.1\\variants\\ARDUINO_NANO33BLE",
+                "C:\\Users\\JK\\Documents\\Arduino\\libraries\\NRF52_MBED_TimerInterrupt\\src",
+                "C:\\Users\\JK\\Documents\\Arduino\\libraries\\Arduino_BMI270_BMM150\\src",
+                "C:\\Users\\JK\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_nano\\4.2.1\\libraries\\Wire",
+                "C:\\Users\\JK\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_nano\\4.2.1\\cores\\arduino\\api\\deprecated",
+                "C:\\Users\\JK\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_nano\\4.2.1\\cores\\arduino\\api\\deprecated-avr-comp",
+                "c:\\users\\jk\\appdata\\local\\arduino15\\packages\\arduino\\tools\\arm-none-eabi-gcc\\7-2017q4\\arm-none-eabi\\include\\c++\\7.2.1",
+                "c:\\users\\jk\\appdata\\local\\arduino15\\packages\\arduino\\tools\\arm-none-eabi-gcc\\7-2017q4\\arm-none-eabi\\include\\c++\\7.2.1\\arm-none-eabi",
+                "c:\\users\\jk\\appdata\\local\\arduino15\\packages\\arduino\\tools\\arm-none-eabi-gcc\\7-2017q4\\arm-none-eabi\\include\\c++\\7.2.1\\backward",
+                "c:\\users\\jk\\appdata\\local\\arduino15\\packages\\arduino\\tools\\arm-none-eabi-gcc\\7-2017q4\\lib\\gcc\\arm-none-eabi\\7.2.1\\include",
+                "c:\\users\\jk\\appdata\\local\\arduino15\\packages\\arduino\\tools\\arm-none-eabi-gcc\\7-2017q4\\lib\\gcc\\arm-none-eabi\\7.2.1\\include-fixed",
+                "c:\\users\\jk\\appdata\\local\\arduino15\\packages\\arduino\\tools\\arm-none-eabi-gcc\\7-2017q4\\arm-none-eabi\\include"
             ],
             "forcedInclude": [
-                "C:\\Users\\Jackie_Chen\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed\\3.3.0\\cores\\arduino\\Arduino.h"
+                "C:\\Users\\JK\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\mbed_nano\\4.2.1\\cores\\arduino\\Arduino.h"
             ],
             "cStandard": "c11",
             "cppStandard": "c++11",
@@ -31,7 +52,7 @@
                 "ARDUINO_ARCH_NRF52840",
                 "ARDUINO=10819",
                 "ARDUINO_ARDUINO_NANO33BLE",
-                "ARDUINO_ARCH_MBED",
+                "ARDUINO_ARCH_MBED_NANO",
                 "ARDUINO_ARCH_MBED",
                 "ARDUINO_LIBRARY_DISCOVERY_PHASE=0",
                 "__DBL_MIN_EXP__=(-1021)",

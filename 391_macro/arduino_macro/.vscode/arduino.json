@@ -1,4 +1,6 @@
 {
-    "board": "arduino:mbed:nano33ble",
-    "sketch": "arduino_macro.ino"
+    "board": "arduino:mbed_nano:nano33ble",
+    "sketch": "arduino_macro.ino",
+    "output": "./build",
+    "programmer": "arduino:cmsis-dap"
 }
