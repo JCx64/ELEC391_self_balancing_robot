@@ -10,7 +10,7 @@
 
 const int sample_time = 30; //sample time in sec
 const int sample_rate1 = 100; // 100 Hz
-const int sample_rate2 = 100; // 50 Hz
+const int sample_rate2 = 100; // 100 Hz
 const int num_samples1 = sample_time * sample_rate1; //number of samples for 100 Hz
 const int num_samples2 = sample_time * sample_rate2; //number of samples for 100 Hz
 
