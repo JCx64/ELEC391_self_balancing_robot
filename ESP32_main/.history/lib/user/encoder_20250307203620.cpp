@@ -38,6 +38,7 @@ void EncoderClass::update()
 
 void EncoderClass::init()
 {
+    Wire.begin(I2C_SDA, I2C_SCL, 400000);
     Wire1.begin(I2C_SDA1, I2C_SCL1, 400000);
 
     Wire1.beginTransmission(MAG_ENCODER_ADDR);

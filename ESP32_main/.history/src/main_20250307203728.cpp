@@ -128,7 +128,7 @@ void loop()
   robot_angle.update();
   robot_encoder.update();
 
-  // rpm_L = robot_encoder.get_Left_drpm()/0.005f;
+  rpm_L = robot_encoder.get_Left_drpm()/0.005f;
   rpm_R = robot_encoder.get_Right_drpm()/0.005f;
 
   float output_balance = 1.f * (robot_angle.get_pitch()-BALANCE_ANGLE) + 0.01f * robot_angle.get_w_yaw();
@@ -157,8 +157,6 @@ void loop()
 
     if(i2c_char == '\n'){
       writeString_2(i2c_str + "\n");
-      rpm_L = i2c_str.toFloat();
-      // printf("%lf\n", rpm_L);
       i2c_str = "";
     }else{
       i2c_str += i2c_char;

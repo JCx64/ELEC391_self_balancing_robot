@@ -158,7 +158,7 @@ void loop()
     if(i2c_char == '\n'){
       writeString_2(i2c_str + "\n");
       rpm_L = i2c_str.toFloat();
-      // printf("%lf\n", rpm_L);
+      printf("%lf\n", rpm_L);
       i2c_str = "";
     }else{
       i2c_str += i2c_char;

@@ -17,10 +17,10 @@ PWMClass :: PWMClass(){
 void  PWMClass::set_left_pwm (float pid_result){
     if(pid_result > 0){
         ledcWrite(1, 255.0 - pid_result * reduction_factor);
-        ledcWrite(0, 255);
+        ledcWrite(0, 255.0);
     }else if(pid_result < 0){
         ledcWrite(0, 255 - (-pid_result * reduction_factor));
-        ledcWrite(1, 255);
+        ledcWrite(1, 255.0);
     }else{
         return;
     }
@@ -28,11 +28,11 @@ void  PWMClass::set_left_pwm (float pid_result){
 
 void PWMClass::set_right_pwm (float pid_result){
     if(pid_result > 0){
-        ledcWrite(2, 255.0 - pid_result * reduction_factor);
-        ledcWrite(3, 255);
+        ledcWrite(2, 255.0  -);
+        ledcWrite(3, pid_result * reduction_factor);
     }else if(pid_result < 0){
-        ledcWrite(3, 255.0 - (-pid_result * reduction_factor));
-        ledcWrite(2, 255);
+        ledcWrite(3, 0);
+        ledcWrite(2, -pid_result * reduction_factor);
     }else{
         return;
     }
