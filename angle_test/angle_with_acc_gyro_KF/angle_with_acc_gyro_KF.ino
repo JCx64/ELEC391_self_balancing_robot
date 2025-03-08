@@ -1,6 +1,6 @@
 /*
 @Team: ELEC391 B2
-@Author: Jiayi Chen, Huiyu Chen
+@Author: Huiyu Chen
 @description: This is a test for Arduino Nano 33 BLE, using accelerometer and gyroscope to measure tilt angle of the board by Kalman Filter.
 @Date: 2025/2/3
 @Note: Tested algorithm is feasible to use, but may not used in final project.
@@ -30,7 +30,7 @@ float pi = 3.141592653589793;
 
 // Dynamic Correction
 // const float threshold = 0.1;
-// const float penalty = 10000000.0; // If over the static threshold, increase R to reduce the overdash. 
+// const float penalty = 100.0; // If over the static threshold, increase Q to reduce the overdash. 
 
 // Start serial port and IMU
 void setup() {
@@ -46,7 +46,7 @@ void loop() {
   if (IMU.accelerationAvailable() && IMU.gyroscopeAvailable()){ // Check accelerometer and gyroscope ready
     // Start timing
     now_time = millis();
-    float sample_time = (now_time - prev_time) / 1000.0; // Convert sample time to sec
+    float dt = (now_time - prev_time) / 1000.0; // Convert sample time to sec
     prev_time = now_time;
 
     // Read accelerometer and calculate tilt angle using accelerometer
@@ -67,20 +67,20 @@ void loop() {
 
     // Kalman Filter: Prediction
     // Prior Estimation, x_prior = A * x_prev + B * u
-     gyro_rate = gyro_x - bias_est; // (theta_k - theta_k-1) / sample_time = gyro_rate = gyro_x - bias_est
-     angle_est += gyro_rate * sample_time; // Calculate tilt angle estimation
+     gyro_rate = gyro_x - bias_est; // (theta_k - theta_k-1) / dt = gyro_rate = gyro_x - bias_est
+     angle_est += gyro_rate * dt; // Calculate tilt angle estimation
 
      // Prior estimated Cov. matrix
-      P[0][0] += sample_time * (sample_time * P[1][1] - P[0][1] - P[1][0] + Q_angle);
-      P[0][1] -= sample_time * P[1][1];
+      P[0][0] += dt * (dt * P[1][1] - P[0][1] - P[1][0] + Q_angle);
+      P[0][1] -= dt * P[1][1];
       P[1][0] = P[0][1];
-      P[1][1] += Q_bias * sample_time;
+      P[1][1] += Q_bias * dt;
 
     // Kalman Filter: Correction
     // Kalman Gain, Kk = (P_prior * H) / (H * P_prior * H' + R)
       float S = P[0][0] + R_measure; // Innovation covariance, denominator
-      float K0 = {P[0][0] / S}; // Kalman gain for angle
-      float K1 = {P[1][0] / S}; // Kalman gain for bias
+      float K0 = P[0][0] / S; // Kalman gain for angle
+      float K1 = P[1][0] / S; // Kalman gain for bias
     
     // Posterior Estimation, x_posterior = x_prior + Kk * (z - H * x_prior)
       float y = tilt_angle_acc - angle_est; // Innovation, measurement - estimation, H = [1 0]
