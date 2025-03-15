@@ -1,23 +1,17 @@
 #include <Arduino.h>
-#include "set_pwm.h"
-#include "pid_alg.h"
-#include "esp_timer.h"
-#include "HardwareSerial.h"
-#include "stdint.h"
-#include "encoder.h"
-#include "myiic.h"
-#include "IMU.h"
-#include "XboxSeriesXControllerESP32_asukiaaa.hpp"
+#include <XboxSeriesXControllerESP32_asukiaaa.hpp>
+#include <HardwareSerial.h>
+#include <encoder.h>
 
-#define TIMER1_INTERVAL_MS 1.f
-#define BALANCE_ANGLE -3.117f //-3.117
-
-IMU imu;
+HardwareSerial SerialPort(2);
 EncoderClass robot_encoder;
-PWMClass robot_pwm;
-myiic myi2c;
+
+// Required to replace with your xbox address
+// 需要在此替换成自己的手柄蓝牙MAC地址
 XboxSeriesXControllerESP32_asukiaaa::Core
     xboxController("f4:6a:d7:8d:e7:a6");
+
+// char angle_str[20];
 
 // Define x_box controller button string to be sent to esp32-s3
 String xbox_string()
@@ -47,69 +41,6 @@ String xbox_string()
   return str;
 };
 
-PIDClass robot_velocity_Left_PID(0.3, 0.8, 0, 0, 30, 100, 0.2, 5.f/1000.f);
-PIDClass robot_velocity_Right_PID(0.3, 0.8, 0, 0, 30, 100, 0.2, 5.f/1000.f);
-PIDClass robot_velocity_PID(105,0.15, 0, 0, 800, 1000, 0.2, 5.f/1000.f); //105 //0.15
-// p<80 小车会站不住，一直往一个方向运动
-PIDClass robot_rotate_PID(0, 0, 0, 0, 50, 100, 0.2, 5.f/1000.f); //0.5
-
-HardwareSerial SerialPort(2);
-
-float rpm_L, rpm_R;
-float last_rpm_L, last_rpm_R;
-int cur_Encoder_Left;
-volatile int pre_Encoder_Left, pre_Encoder_Right;
-bool sendRequest = false;
-
-float roll,pitch,yaw;
-
-//Xbox variables
-String responseBuffer = ""; //用于接收数据
-uint16_t angleLeft = 0;
-
-float get_Left_drpm(int __cur_Encoder_Left, int __pre_Encoder_Left){
-    float d_Encoder = __cur_Encoder_Left - __pre_Encoder_Left;
-    if(abs(d_Encoder) > 2000)
-    {
-      if(d_Encoder > 0)
-      d_Encoder -= 4095;
-    else
-      d_Encoder += 4095;
-    }
-    pre_Encoder_Left = __cur_Encoder_Left;
-    return d_Encoder * 60.f / (4095.f); // d_Encoder * 360 / 4095 -> w   rpm = w / 6
-}
-
-float get_Right_drpm(int __cur_Encoder_Right, int __pre_Encoder_Right){
-    float d_Encoder = __cur_Encoder_Right - __pre_Encoder_Right;
-    if(abs(d_Encoder) > 2000)
-    {
-      if(d_Encoder > 0)
-      d_Encoder -= 4095;
-    else
-      d_Encoder += 4095;
-    }
-    pre_Encoder_Right = __cur_Encoder_Right;
-    return d_Encoder * 60.f / (4095.f); // d_Encoder * 360 / 4095 -> w   rpm = w / 6
-}
-
-void writeString_2(String stringData){
-  for(int i = 0; i < stringData.length(); i++){
-    Serial2.write(stringData[i]);
-  }
-}
-
-void swapEndian(float *f) {
-    uint8_t *p = (uint8_t *)f;
-    uint8_t temp[4];
-    temp[0] = p[3];
-    temp[1] = p[2];
-    temp[2] = p[1];
-    temp[3] = p[0];
-    *f = *(float *)temp;
-}
-
-// Xbox functions below
 /*
 支持四种振动模式
 left：上左电机动
@@ -136,7 +67,7 @@ shake：下左电机和下右电机一起动，频率低力量大
 // repo.v.timeSilent = 0;   // 静止 x/100 秒
 // repo.v.countRepeat = 0;  // 循环次数 x+1
 
-// 官方例程 后期加extra featrue可以看这个 选择不同振动模式
+// 官方例程
 void demoVibration()
 {
   XboxSeriesXHIDReportBuilder_asukiaaa::ReportBase repo;
@@ -186,7 +117,7 @@ void demoVibration()
   delay(2000);
 }
 
-// 振动反馈，根据扳机按压力度调整振动力度 **正在使用 左右扳机会根据按压力度调整震动力度**
+// 振动反馈，根据扳机按压力度调整振动力度
 void trigger_vibration_press_ctrl()
 {
   XboxSeriesXHIDReportBuilder_asukiaaa::ReportBase repo;
@@ -209,118 +140,128 @@ void trigger_vibration_press_ctrl()
   xboxController.writeHIDReport(repo);
   str_1 = String(repo.v.power.left) + "," + String(repo.v.power.right) + "\n";
 
-  //Serial.print(str_1);
-  //delay(50);
+  Serial.print(str_1);
+  delay(50);
 }
+
+void writeString_2(String stringData) 
+{ 
+  for (int i = 0; i < stringData.length(); i++)
+  {
+    Serial2.write(stringData[i]);  
+  }
+}
+
+bool parseResponseFrame(String frame, uint16_t &angle){
+  if (!frame.startsWith("$")) return false;
+  int starIdx = frame.indexOf("*");
+  if (starIdx == -1) return false;
+
+  // 提取数据部分
+  String dataPart = frame.substring(1, starIdx);
+  // 提取校验码
+  String checksumStr = frame.substring(starIdx + 1);
+  checksumStr.trim();
+
+  uint8_t checksum = 0;
+  for (int i = 1; i < frame.length(); i++) {
+    char c = frame.charAt(i);
+    if (c == '*') break;
+    checksum ^= c;
+  }
+
+  uint8_t recvChecksum = strtol(checksumStr.c_str(), NULL, 16);
+  if (checksum != recvChecksum) return false;
+
+  // 提取数据部分
+  angle = dataPart.toInt();
+  return true;
+  
+}
+
 
 void setup()
 {
   Serial.begin(115200);
-  // Serial2.begin(115200, SERIAL_8N1, 9, 10);
-
-  imu.begin(false);
-  robot_pwm.init();
-  robot_encoder.init();
+  Serial2.begin(115200, SERIAL_8N1, 13, 14); //RX:44 TX:43 Baudrate:115200
+  robot_encoder.init(); //initialize i2c
   xboxController.begin();
 
-  //simulate two pin as i2c SCL and SDA
-  pinMode(SIM_SDA_PIN, OUTPUT);
-  pinMode(SIM_SCL_PIN, OUTPUT);
-  digitalWrite(SIM_SDA_PIN, HIGH);
-  digitalWrite(SIM_SCL_PIN, HIGH);
-  
-  delay(2000); 
+  // Serial.println("Scanning I2C devices...");
+  // for (uint8_t address = 1; address < 127; address++) {
+  //   Wire.beginTransmission(address);
+  //   if (Wire.endTransmission() == 0) {
+  //     Serial.print("I2C device found at address 0x");
+  //     Serial.println(address, HEX);
+  //   }
+  // }
 }
 
-unsigned long prev_time_200hz = 0;
-unsigned long prev_time_20hz = 0;
+String responseBuffer = ""; //用于接收数据
 
-uint16_t input_move;
+uint16_t angleLeft = 0;
 
 void loop()
 {
-  unsigned long current_time = micros();
+  robot_encoder.update();
 
-  if(current_time - prev_time_20hz >= 50000){
-    if(xboxController.isConnected()){
-      if (xboxController.isWaitingForFirstNotification())
-      {
-        Serial.println("waiting for first notification");
-      }
-      else
-      {
-        // printf("%s\n", xbox_string().c_str());
-        input_move = xboxController.xboxNotif.joyLVert;
-        //demoVibration();
-        trigger_vibration_press_ctrl();
-      }
-    }
-    else{
-      xboxController.onLoop();
-      printf("Xbox connecting......\n");
-    }
-    prev_time_20hz = current_time;
-  }
-  else if(current_time - prev_time_200hz >= 5000){
-    imu.update();
-    imu.getEulerAngles(roll,pitch,yaw);
+  // // read xbox controller data
+  // xboxController.onLoop();
+  // if (xboxController.isConnected())
+  // {
+  //   if (xboxController.isWaitingForFirstNotification())
+  //   {
+  //     Serial.println("waiting for first notification");
+  //   }
+  //   else
+  //   {
+  //     // printf("%s\n", xbox_string().c_str());
+  //     //demoVibration();
+  //     trigger_vibration_press_ctrl();
+  //   }
+  // }
+  // else
+  // {
+  //   // Serial.println("not connected");
+  //   // printf("0\n");
+  //   // if (xboxController.getCountFailedConnection() > 2)
+  //   // {
+  //   //   ESP.restart();
+  //   // }
+  // }
 
-    //update right encoder using real i2c
-    robot_encoder.update();
+  // read left encoder data
+  float rpm_L = robot_encoder.get_Left_drpm()/0.005f;
 
-    //update left encoder using sim i2c
-    uint16_t cur_Encoder_Left = myi2c.readAS5600Angle();
+  //send message through uart2
+  if(Serial2.available()){
+    // writeString_2(xbox_string().c_str());
+    uint16_t angle = robot_encoder.readMagEncoderLeft();
+    // printf("%d\n", angle);
+    // writeString_2(String(rpm_L)+"\n");
+    writeString_2(String(angle)+"\n");
     
-    rpm_L = get_Left_drpm(cur_Encoder_Left, pre_Encoder_Left)/0.005f;
-    rpm_R = get_Right_drpm(robot_encoder.cur_Encoder_Right, pre_Encoder_Right)/0.005f;
-
-    rpm_L = 0.125*rpm_L+(1-0.125)*last_rpm_L;
-    rpm_R = 0.125*rpm_R+(1-0.125)*last_rpm_R;
-
-    float output_balance = 0.6f* (28.f * (pitch-BALANCE_ANGLE) + 20.f * imu.getPitchAngularVelocity()); //40 37.5
-
-    robot_rotate_PID.pid_setTarget(0);
-    float output_rotate = robot_rotate_PID.pid_TimerElapsedCallback(imu.getYawAngularVelocity());
-
-    float velocity_Forward = 3.1415f * 0.08f * (rpm_L - rpm_R) / 30.f;
-    float moveSpeed = 0;
-    if(input_move > 35000){
-      moveSpeed = -0.3;
-    }
-    else if (input_move <31000){
-      moveSpeed = 0.3;
-    }
-    robot_velocity_PID.pid_setTarget(moveSpeed);
-    float output_velocity = robot_velocity_PID.pid_TimerElapsedCallback(velocity_Forward);
-
-    robot_velocity_Left_PID.pid_setTarget(-output_balance + output_velocity - output_rotate);
-    float motor_left_velocity = robot_velocity_Left_PID.pid_TimerElapsedCallback(rpm_L);
-
-    robot_velocity_Right_PID.pid_setTarget(output_balance - output_velocity + output_rotate);
-    float motor_right_velocity = robot_velocity_Right_PID.pid_TimerElapsedCallback(rpm_R);
-
-    robot_pwm.set_left_pwm(motor_left_velocity);
-    robot_pwm.set_right_pwm(motor_right_velocity);
-
-    //send message to vofa
-    float data[4];
-    data[0] = -output_balance + output_velocity - output_rotate;
-    data[1] = cur_Encoder_Left;
-    data[2] = output_balance - output_velocity + output_rotate;
-    data[3] = rpm_R;
-    uint8_t tail[4] = {0x00, 0x00, 0x80, 0x7F};  // JustFloat 帧尾
-
-    //发送 float 数据
-    //Serial.write((uint8_t*)data, sizeof(data));
-    //发送 JustFloat 帧尾
-    //Serial.write(tail, sizeof(tail));
-
-    //printf("Left: %f Right: %f Angle: %f\n",rpm_L,rpm_R,pitch); 
-    printf("%lu\n", current_time - prev_time_200hz);
-   
-    //update prev values
-    prev_time_200hz = current_time;
-    last_rpm_L = rpm_L;
-    last_rpm_R = rpm_R;
+    // clear send buffer, ready for next transmmission
+    Serial2.flush();
   }
+
+//  if(Serial2.available()){
+//     String req = Serial2.readStringUntil('\n'); //读取一行命令
+//     req.trim(); //去除空格
+//     if(req == "REQ"){//若收到请求
+//       //读取并计算编码器数据
+//       uint16_t angle = robot_encoder.readMagEncoderLeft();
+      
+//       //构造响应帧
+//       //String response = constructResponseFrame(angle);
+//       //Serial2.write(response.c_str()); //发送响应帧
+
+//       uint8_t high = angle >> 8;
+//       Serial2.write(high);
+//       uint8_t low = angle;
+//       Serial2.write(low);
+
+//       Serial2.flush(); //清空串口缓冲区
+//     }
+//   }
 }
