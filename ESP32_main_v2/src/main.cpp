@@ -10,8 +10,7 @@
 #include "XboxSeriesXControllerESP32_asukiaaa.hpp"
 
 #define TIMER1_INTERVAL_MS 1.f
-#define BALANCE_ANGLE -3.117f //-3.117
-
+#define BALANCE_ANGLE -1.81f //-3.117
 IMU imu;
 EncoderClass robot_encoder;
 PWMClass robot_pwm;
@@ -49,7 +48,7 @@ String xbox_string()
 
 PIDClass robot_velocity_Left_PID(0.3, 0.8, 0, 0, 30, 100, 0.2, 5.f/1000.f);
 PIDClass robot_velocity_Right_PID(0.3, 0.8, 0, 0, 30, 100, 0.2, 5.f/1000.f);
-PIDClass robot_velocity_PID(105,0.15, 0, 0, 800, 1000, 0.2, 5.f/1000.f); //105 //0.15
+PIDClass robot_velocity_PID(103, 0.11, 0, 0, 800, 1000, 0.2, 5.f/1000.f); //105 //0.15
 // p<80 小车会站不住，一直往一个方向运动
 PIDClass robot_rotate_PID(0, 0, 0, 0, 50, 100, 0.2, 5.f/1000.f); //0.5
 
@@ -257,7 +256,7 @@ void loop()
     }
     else{
       xboxController.onLoop();
-      printf("Xbox connecting......\n");
+      // printf("Xbox connecting......\n");
     }
     prev_time_20hz = current_time;
   }
@@ -274,15 +273,21 @@ void loop()
     rpm_L = get_Left_drpm(cur_Encoder_Left, pre_Encoder_Left)/0.005f;
     rpm_R = get_Right_drpm(robot_encoder.cur_Encoder_Right, pre_Encoder_Right)/0.005f;
 
+    // EMWA, used to smooth the rpm value
     rpm_L = 0.125*rpm_L+(1-0.125)*last_rpm_L;
     rpm_R = 0.125*rpm_R+(1-0.125)*last_rpm_R;
 
-    float output_balance = 0.6f* (28.f * (pitch-BALANCE_ANGLE) + 20.f * imu.getPitchAngularVelocity()); //40 37.5
+    float angle_error = pitch-BALANCE_ANGLE;
+    if(abs(angle_error)<0.1f){
+      angle_error = 0;
+    }
+    float output_balance = 0.6f * (48.f * angle_error + 158.f * imu.getPitchAngularVelocity()); //48 158
+
 
     robot_rotate_PID.pid_setTarget(0);
     float output_rotate = robot_rotate_PID.pid_TimerElapsedCallback(imu.getYawAngularVelocity());
 
-    float velocity_Forward = 3.1415f * 0.08f * (rpm_L - rpm_R) / 30.f;
+    float velocity_Forward = 3.1415926f * 0.08f * (rpm_L - rpm_R) / 30.f;
     float moveSpeed = 0;
     if(input_move > 35000){
       moveSpeed = -0.3;
@@ -315,8 +320,8 @@ void loop()
     //发送 JustFloat 帧尾
     //Serial.write(tail, sizeof(tail));
 
-    //printf("Left: %f Right: %f Angle: %f\n",rpm_L,rpm_R,pitch); 
-    printf("%lu\n", current_time - prev_time_200hz);
+    printf("Left: %f Right: %f Angle: %f\n",rpm_L,rpm_R,pitch); 
+    // printf("%lu\n", current_time - prev_time_200hz);
    
     //update prev values
     prev_time_200hz = current_time;
