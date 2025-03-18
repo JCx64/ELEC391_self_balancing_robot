@@ -10,7 +10,7 @@
 #include "XboxSeriesXControllerESP32_asukiaaa.hpp"
 
 #define TIMER1_INTERVAL_MS 1.f
-#define BALANCE_ANGLE -1.81f //-3.117
+#define BALANCE_ANGLE -1.9f //-3.117 // -1.81
 IMU imu;
 EncoderClass robot_encoder;
 PWMClass robot_pwm;
@@ -48,7 +48,7 @@ String xbox_string()
 
 PIDClass robot_velocity_Left_PID(0.3, 0.8, 0, 0, 30, 100, 0.2, 5.f/1000.f);
 PIDClass robot_velocity_Right_PID(0.3, 0.8, 0, 0, 30, 100, 0.2, 5.f/1000.f);
-PIDClass robot_velocity_PID(103, 0.11, 0, 0, 800, 1000, 0.2, 5.f/1000.f); //105 //0.15
+PIDClass robot_velocity_PID(107, 0.060, 0, 0, 800, 1000, 0.2, 5.f/1000.f); //105 //0.15   、、、、0.060
 // p<80 小车会站不住，一直往一个方向运动
 PIDClass robot_rotate_PID(0, 0, 0, 0, 50, 100, 0.2, 5.f/1000.f); //0.5
 
@@ -281,7 +281,7 @@ void loop()
     if(abs(angle_error)<0.1f){
       angle_error = 0;
     }
-    float output_balance = 0.6f * (48.f * angle_error + 158.f * imu.getPitchAngularVelocity()); //48 158
+    float output_balance = 0.6f * (48.f * angle_error + 160.f * imu.getPitchAngularVelocity()); //48 158
 
 
     robot_rotate_PID.pid_setTarget(0);
