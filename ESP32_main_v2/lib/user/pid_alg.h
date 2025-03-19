@@ -18,6 +18,7 @@ class PIDClass{
         PIDClass(float p, float i, float d, float f, float i_max, float o_max, float ed,float deltaT);
         float pid_TimerElapsedCallback(float input);
         void pid_setTarget(float t);
+        void pid_seperateI();
     private:
         float k_p;
         float k_i;
@@ -34,6 +35,8 @@ class PIDClass{
 
         volatile float error_last;
         volatile float integral_last;
+
+        bool seperateI;
 };
 
 #endif

@@ -6,7 +6,6 @@ IMU::IMU() : yaw_offset(0), pitch_offset(0), roll_offset(0), lastTime(0), dt(0),
 void IMU::begin(bool useDMP){
     this->useDMP = useDMP;
     Wire.begin(I2C_SDA, I2C_SCL, 100000);
-    Serial.begin(115200);
     mpu.initialize();
     calibrate();
 }
@@ -26,7 +25,7 @@ void IMU::calibrate(){
         }
     }
     else{
-        unsigned short times = 200;
+        unsigned short times = 100;
         axo = ayo = azo = gxo = gyo = gzo = 0;
 
         for(int i = 0; i < times; i++){

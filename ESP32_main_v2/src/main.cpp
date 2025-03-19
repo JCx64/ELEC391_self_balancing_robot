@@ -8,17 +8,45 @@
 #include "myiic.h"
 #include "IMU.h"
 #include "XboxSeriesXControllerESP32_asukiaaa.hpp"
+#include "Adafruit_NeoPixel.h"
 
-#define TIMER1_INTERVAL_MS 1.f
+// Define Variable
 #define BALANCE_ANGLE -1.9f //-3.117 // -1.81
+
+// Class Initialization
 IMU imu;
 EncoderClass robot_encoder;
 PWMClass robot_pwm;
 myiic myi2c;
+Adafruit_NeoPixel strip(1, 48, NEO_GRB + NEO_KHZ800);
+HardwareSerial SerialPort(2);
 XboxSeriesXControllerESP32_asukiaaa::Core
     xboxController("f4:6a:d7:8d:e7:a6");
 
-// Define x_box controller button string to be sent to esp32-s3
+// PID Initialization
+PIDClass robot_velocity_Left_PID(0.3, 0.8, 0, 0, 30, 100, 0.2, 5.f/1000.f);
+PIDClass robot_velocity_Right_PID(0.3, 0.8, 0, 0, 30, 100, 0.2, 5.f/1000.f);
+PIDClass robot_velocity_PID(107, 0.060, 0, 0, 800, 1000, 0.2, 5.f/1000.f); //105 //0.15   、、、、0.060  p<80 小车会站不住，一直往一个方向运动
+PIDClass robot_rotate_PID(0, 0, 0, 0, 50, 100, 0.2, 5.f/1000.f); //0.5
+
+// Variable Initialization
+float rpm_L, rpm_R;
+int cur_Encoder_Left;
+float last_rpm_L, last_rpm_R;
+volatile int pre_Encoder_Left, pre_Encoder_Right;
+float moveSpeed;
+float output_rotate;
+bool sendRequest = false;
+bool skipVelocity = false;
+float roll,pitch,yaw;
+uint8_t green = 255;
+bool upOrDown = true;
+String responseBuffer = ""; //用于接收数据
+uint16_t angleLeft = 0;
+unsigned long prev_time_200hz = 0;
+unsigned long prev_time_20hz = 0;
+uint16_t input_move;
+uint8_t input_rotate_L,input_rotate_R;
 String xbox_string()
 {
   String str = String(xboxController.xboxNotif.btnY) + "," + // Y: 0/1 bool
@@ -46,26 +74,7 @@ String xbox_string()
   return str;
 };
 
-PIDClass robot_velocity_Left_PID(0.3, 0.8, 0, 0, 30, 100, 0.2, 5.f/1000.f);
-PIDClass robot_velocity_Right_PID(0.3, 0.8, 0, 0, 30, 100, 0.2, 5.f/1000.f);
-PIDClass robot_velocity_PID(107, 0.060, 0, 0, 800, 1000, 0.2, 5.f/1000.f); //105 //0.15   、、、、0.060
-// p<80 小车会站不住，一直往一个方向运动
-PIDClass robot_rotate_PID(0, 0, 0, 0, 50, 100, 0.2, 5.f/1000.f); //0.5
-
-HardwareSerial SerialPort(2);
-
-float rpm_L, rpm_R;
-float last_rpm_L, last_rpm_R;
-int cur_Encoder_Left;
-volatile int pre_Encoder_Left, pre_Encoder_Right;
-bool sendRequest = false;
-
-float roll,pitch,yaw;
-
-//Xbox variables
-String responseBuffer = ""; //用于接收数据
-uint16_t angleLeft = 0;
-
+// Function Statement
 float get_Left_drpm(int __cur_Encoder_Left, int __pre_Encoder_Left){
     float d_Encoder = __cur_Encoder_Left - __pre_Encoder_Left;
     if(abs(d_Encoder) > 2000)
@@ -212,107 +221,133 @@ void trigger_vibration_press_ctrl()
   //delay(50);
 }
 
+
+
 void setup()
 {
-  Serial.begin(115200);
+   Serial.begin(115200);
   // Serial2.begin(115200, SERIAL_8N1, 9, 10);
 
   imu.begin(false);
   robot_pwm.init();
   robot_encoder.init();
   xboxController.begin();
+  moveSpeed = 0.5f;
+
+  while(!xboxController.isConnected()){
+    xboxController.onLoop();
+    delay(500);
+  }
 
   //simulate two pin as i2c SCL and SDA
   pinMode(SIM_SDA_PIN, OUTPUT);
   pinMode(SIM_SCL_PIN, OUTPUT);
   digitalWrite(SIM_SDA_PIN, HIGH);
   digitalWrite(SIM_SCL_PIN, HIGH);
-  
-  delay(2000); 
+
+  strip.begin();          // 初始化
+  strip.show();           // 清空灯光
+  strip.setBrightness(50); // 可调亮度 (0-255)
+  strip.setPixelColor(0, strip.Color(255, 0, 0));
+  strip.show();  
+  delay(2000);
 }
-
-unsigned long prev_time_200hz = 0;
-unsigned long prev_time_20hz = 0;
-
-uint16_t input_move;
 
 void loop()
 {
   unsigned long current_time = micros();
 
   if(current_time - prev_time_20hz >= 50000){
+    xboxController.onLoop();
     if(xboxController.isConnected()){
-      if (xboxController.isWaitingForFirstNotification())
-      {
-        Serial.println("waiting for first notification");
-      }
-      else
-      {
-        // printf("%s\n", xbox_string().c_str());
         input_move = xboxController.xboxNotif.joyLVert;
-        //demoVibration();
+        input_rotate_L = xboxController.xboxNotif.trigLT;
+        input_rotate_R = xboxController.xboxNotif.trigRT;
         trigger_vibration_press_ctrl();
-      }
-    }
-    else{
-      xboxController.onLoop();
-      // printf("Xbox connecting......\n");
     }
     prev_time_20hz = current_time;
   }
   else if(current_time - prev_time_200hz >= 5000){
     imu.update();
     imu.getEulerAngles(roll,pitch,yaw);
-
-    //update right encoder using real i2c
     robot_encoder.update();
-
-    //update left encoder using sim i2c
     uint16_t cur_Encoder_Left = myi2c.readAS5600Angle();
     
     rpm_L = get_Left_drpm(cur_Encoder_Left, pre_Encoder_Left)/0.005f;
     rpm_R = get_Right_drpm(robot_encoder.cur_Encoder_Right, pre_Encoder_Right)/0.005f;
 
     // EMWA, used to smooth the rpm value
-    rpm_L = 0.125*rpm_L+(1-0.125)*last_rpm_L;
+    rpm_L = 0.125*rpm_L+(1-0.125)*last_rpm_L; 
     rpm_R = 0.125*rpm_R+(1-0.125)*last_rpm_R;
 
     float angle_error = pitch-BALANCE_ANGLE;
-    if(abs(angle_error)<0.1f){
+    if(abs(angle_error)<0.3f){
       angle_error = 0;
     }
     float output_balance = 0.6f * (48.f * angle_error + 160.f * imu.getPitchAngularVelocity()); //48 158
 
+    // 左右同时按下
+    if(input_rotate_R != 0 && input_rotate_L !=0){
+      skipVelocity = false;
+      if(abs(output_rotate) > 0.01f)
+        output_rotate = output_rotate + 0.1*(0.f - output_rotate);
+    }
+    // 右边按下
+    else if(input_rotate_R != 0){
+      output_rotate = -30.f;
+      skipVelocity = true;
+    }
+    // 左边按下
+    else if(input_rotate_L != 0){
+      output_rotate = 30.f;
+      skipVelocity = true;
+    }
+    // 两边都不按
+    else{
+      skipVelocity = false;
+      if(abs(output_rotate) > 0.01f)
+        output_rotate = output_rotate + 0.1*(0.f - output_rotate);
+    }
 
-    robot_rotate_PID.pid_setTarget(0);
-    float output_rotate = robot_rotate_PID.pid_TimerElapsedCallback(imu.getYawAngularVelocity());
+    // 后退
+    if(input_move > 35000){ 
+      moveSpeed = 0.f;
+      skipVelocity = true;
+    }
+    // 前进
+    else if (input_move <30000){
+      skipVelocity = true;
+      moveSpeed = 0.8;
+    }
+    // 没油门
+    else{
+      skipVelocity = false;
+      if(moveSpeed - 0.5f > 0.01f)
+        moveSpeed = moveSpeed + 0.1*(0.5f - moveSpeed);
+    }
 
+    float output_velocity = 0.f;
+    if(skipVelocity)
+      robot_velocity_PID.pid_seperateI();
     float velocity_Forward = 3.1415926f * 0.08f * (rpm_L - rpm_R) / 30.f;
-    float moveSpeed = 0;
-    if(input_move > 35000){
-      moveSpeed = -0.3;
-    }
-    else if (input_move <31000){
-      moveSpeed = 0.3;
-    }
     robot_velocity_PID.pid_setTarget(moveSpeed);
-    float output_velocity = robot_velocity_PID.pid_TimerElapsedCallback(velocity_Forward);
+    output_velocity = robot_velocity_PID.pid_TimerElapsedCallback(velocity_Forward);
 
-    robot_velocity_Left_PID.pid_setTarget(-output_balance + output_velocity - output_rotate);
+
+    robot_velocity_Left_PID.pid_setTarget(-output_balance + output_velocity);
     float motor_left_velocity = robot_velocity_Left_PID.pid_TimerElapsedCallback(rpm_L);
-
-    robot_velocity_Right_PID.pid_setTarget(output_balance - output_velocity + output_rotate);
+    robot_velocity_Right_PID.pid_setTarget(output_balance - output_velocity);
     float motor_right_velocity = robot_velocity_Right_PID.pid_TimerElapsedCallback(rpm_R);
 
-    robot_pwm.set_left_pwm(motor_left_velocity);
-    robot_pwm.set_right_pwm(motor_right_velocity);
+    robot_pwm.set_left_pwm(motor_left_velocity + output_rotate);
+    robot_pwm.set_right_pwm(motor_right_velocity + output_rotate);
 
     //send message to vofa
-    float data[4];
-    data[0] = -output_balance + output_velocity - output_rotate;
-    data[1] = cur_Encoder_Left;
-    data[2] = output_balance - output_velocity + output_rotate;
-    data[3] = rpm_R;
+    float data[1];
+    data[0] = pitch;
+    // data[1] = cur_Encoder_Left;
+    // data[2] = output_balance - output_velocity + output_rotate;
+    // data[3] = rpm_R;
     uint8_t tail[4] = {0x00, 0x00, 0x80, 0x7F};  // JustFloat 帧尾
 
     //发送 float 数据
@@ -320,12 +355,23 @@ void loop()
     //发送 JustFloat 帧尾
     //Serial.write(tail, sizeof(tail));
 
-    printf("Left: %f Right: %f Angle: %f\n",rpm_L,rpm_R,pitch); 
-    // printf("%lu\n", current_time - prev_time_200hz);
+    //printf("Left: %f Right: %f Angle: %f\n",rpm_L,rpm_R,pitch); 
+    // printf("%f\n", pitch);
    
     //update prev values
     prev_time_200hz = current_time;
     last_rpm_L = rpm_L;
     last_rpm_R = rpm_R;
+
+    if(upOrDown)
+      green--;
+    else
+      green++;
+    if(green == 255)
+      upOrDown = true;
+    else if(green == 0)
+      upOrDown = false;
+    strip.setPixelColor(0, strip.Color(0, green, 0));
+    strip.show();
   }
 }

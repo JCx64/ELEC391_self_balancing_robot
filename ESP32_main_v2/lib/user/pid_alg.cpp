@@ -32,10 +32,15 @@ PIDClass :: PIDClass(float p, float i, float d, float f, float i_max, float o_ma
     error_deadzone = ed;
     error_last = 0.f;
     integral_last = 0.f;
+    seperateI = false;
 }
 
 void PIDClass :: pid_setTarget(float t){
     target = t;
+}
+
+void PIDClass :: pid_seperateI(){
+    seperateI = true;
 }
 
 /**
@@ -48,16 +53,19 @@ float PIDClass :: pid_TimerElapsedCallback(float input){
     
     float output_p = error * k_p;
 
-    integral_last += error * timeInterval;
-    if(abs(integral_last) > integral_max){
-        if(integral_last > 0.f){
-            integral_last = integral_max;
+    float output_i = 0.f;
+    if(!seperateI){
+        integral_last += error * timeInterval;
+        if(abs(integral_last) > integral_max){
+            if(integral_last > 0.f){
+                integral_last = integral_max;
+            }
+            else{
+                integral_last = -integral_max;
+            }
         }
-        else{
-            integral_last = -integral_max;
-        }
+        output_i = integral_last*k_i;
     }
-    float output_i = integral_last*k_i;
 
     float output_d = k_d * (error - error_last) / timeInterval;
     error_last = error;
@@ -71,5 +79,7 @@ float PIDClass :: pid_TimerElapsedCallback(float input){
             output = -output_max;
         }
     }
+
+    seperateI = false;
     return output;
 }
