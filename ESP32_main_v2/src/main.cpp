@@ -9,9 +9,7 @@
 #include "IMU.h"
 #include "XboxSeriesXControllerESP32_asukiaaa.hpp"
 #include "Adafruit_NeoPixel.h"
-
-// Define Variable
-#define BALANCE_ANGLE -1.9f //-3.117 // -1.81
+#include "servoControl.h"
 
 // Class Initialization
 IMU imu;
@@ -20,16 +18,18 @@ PWMClass robot_pwm;
 myiic myi2c;
 Adafruit_NeoPixel strip(1, 48, NEO_GRB + NEO_KHZ800);
 HardwareSerial SerialPort(2);
+ServoController robot_servo;
 XboxSeriesXControllerESP32_asukiaaa::Core
     xboxController("f4:6a:d7:8d:e7:a6");
 
 // PID Initialization
 PIDClass robot_velocity_Left_PID(0.3, 0.8, 0, 0, 30, 100, 0.2, 5.f/1000.f);
 PIDClass robot_velocity_Right_PID(0.3, 0.8, 0, 0, 30, 100, 0.2, 5.f/1000.f);
-PIDClass robot_velocity_PID(107, 0.060, 0, 0, 800, 1000, 0.2, 5.f/1000.f); //105 //0.15   、、、、0.060  p<80 小车会站不住，一直往一个方向运动
+PIDClass robot_velocity_PID(138.5, 0.40, 0, 0, 500, 1000, 0.2, 5.f/1000.f); //105 //0.15   、、、、0.060  p<80 小车会站不住，一直往一个方向运动
 PIDClass robot_rotate_PID(0, 0, 0, 0, 50, 100, 0.2, 5.f/1000.f); //0.5
 
 // Variable Initialization
+float  BALANCE_ANGLE;
 float rpm_L, rpm_R;
 int cur_Encoder_Left;
 float last_rpm_L, last_rpm_R;
@@ -222,32 +222,53 @@ void trigger_vibration_press_ctrl()
 }
 
 
-
 void setup()
 {
-   Serial.begin(115200);
+  strip.begin();          // 初始化
+  strip.show();           // 清空灯光
+  strip.setBrightness(50); // 可调亮度 (0-255)
+
+  Serial.begin(115200);
   // Serial2.begin(115200, SERIAL_8N1, 9, 10);
 
-  imu.begin(false);
   robot_pwm.init();
   robot_encoder.init();
-  xboxController.begin();
-  moveSpeed = 0.5f;
-
-  while(!xboxController.isConnected()){
-    xboxController.onLoop();
-    delay(500);
-  }
+  robot_servo.init();
+  moveSpeed = 0.f;
+  BALANCE_ANGLE = -1.8;
 
   //simulate two pin as i2c SCL and SDA
   pinMode(SIM_SDA_PIN, OUTPUT);
   pinMode(SIM_SCL_PIN, OUTPUT);
   digitalWrite(SIM_SDA_PIN, HIGH);
   digitalWrite(SIM_SCL_PIN, HIGH);
+  //robot_servo.setLeftServoAngle(0);
+  //robot_servo.setRightServoAngle(0);
+  delay(2000);
+  // 红灯闪两下提示IMU准备初始化
+  bool flash = true;
+  for(int i = 0;i<3;i++){
+    int light = flash? 255:0;
+    strip.setPixelColor(0, strip.Color(light, 0, 0));
+    strip.show();  
+    flash = !flash;
+    delay(500);
+  }
 
-  strip.begin();          // 初始化
-  strip.show();           // 清空灯光
-  strip.setBrightness(50); // 可调亮度 (0-255)
+  // 开始初始化亮蓝灯
+  strip.setPixelColor(0, strip.Color(0, 0, 255));
+  strip.show();  
+  imu.begin(false);
+  // IMU初始化完毕 关灯
+  strip.setPixelColor(0, strip.Color(0, 0, 0));
+  strip.show(); 
+
+  xboxController.begin();
+  while(!xboxController.isConnected()){
+    xboxController.onLoop();
+    delay(500);
+  }
+
   strip.setPixelColor(0, strip.Color(255, 0, 0));
   strip.show();  
   delay(2000);
@@ -280,12 +301,6 @@ void loop()
     rpm_L = 0.125*rpm_L+(1-0.125)*last_rpm_L; 
     rpm_R = 0.125*rpm_R+(1-0.125)*last_rpm_R;
 
-    float angle_error = pitch-BALANCE_ANGLE;
-    if(abs(angle_error)<0.3f){
-      angle_error = 0;
-    }
-    float output_balance = 0.6f * (48.f * angle_error + 160.f * imu.getPitchAngularVelocity()); //48 158
-
     // 左右同时按下
     if(input_rotate_R != 0 && input_rotate_L !=0){
       skipVelocity = false;
@@ -310,21 +325,32 @@ void loop()
     }
 
     // 后退
-    if(input_move > 35000){ 
-      moveSpeed = 0.f;
+    if(input_move > 45000){ 
+      moveSpeed = -0.001f;
+      BALANCE_ANGLE = 2.f;
       skipVelocity = true;
     }
     // 前进
-    else if (input_move <30000){
+    else if (input_move <25000){
       skipVelocity = true;
-      moveSpeed = 0.8;
+      moveSpeed = 1.0f;
     }
     // 没油门
     else{
       skipVelocity = false;
-      if(moveSpeed - 0.5f > 0.01f)
-        moveSpeed = moveSpeed + 0.1*(0.5f - moveSpeed);
+      if(abs(moveSpeed) > 0.01f)
+        moveSpeed = moveSpeed - 0.1* moveSpeed;
+      if(BALANCE_ANGLE + 1.9f > 0.01f)
+        BALANCE_ANGLE = BALANCE_ANGLE - 0.5*(1.9f + BALANCE_ANGLE);
     }
+
+    float angle_error = pitch-BALANCE_ANGLE;
+    float angle_velocity = imu.getPitchAngularVelocity();
+    if(abs(angle_error)<0.3f)
+      angle_error = 0;
+    if(abs(angle_velocity)<0.08f)
+      angle_velocity = 0;
+    float output_balance = 0.6f * (48.f * angle_error + 160.f * angle_velocity) + 70.f; //48 158
 
     float output_velocity = 0.f;
     if(skipVelocity)
@@ -332,7 +358,6 @@ void loop()
     float velocity_Forward = 3.1415926f * 0.08f * (rpm_L - rpm_R) / 30.f;
     robot_velocity_PID.pid_setTarget(moveSpeed);
     output_velocity = robot_velocity_PID.pid_TimerElapsedCallback(velocity_Forward);
-
 
     robot_velocity_Left_PID.pid_setTarget(-output_balance + output_velocity);
     float motor_left_velocity = robot_velocity_Left_PID.pid_TimerElapsedCallback(rpm_L);
@@ -356,7 +381,7 @@ void loop()
     //Serial.write(tail, sizeof(tail));
 
     //printf("Left: %f Right: %f Angle: %f\n",rpm_L,rpm_R,pitch); 
-    // printf("%f\n", pitch);
+    printf("%f\n", angle_velocity);
    
     //update prev values
     prev_time_200hz = current_time;

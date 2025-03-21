@@ -2,7 +2,7 @@
 
 ServoController::ServoController() {}
 
-void ServoController::begin() {
+void ServoController::init() {
     ledcSetup(leftChannel, LEDC_FREQ, LEDC_RESOLUTION);
     ledcAttachPin(SERVO_LEFT_PIN, leftChannel);
 
@@ -11,7 +11,7 @@ void ServoController::begin() {
 }
 
 void ServoController::setLeftServoAngle(int angle) {
-    int duty = map(angle, 0, 180, 103, 511);  // 12-bit 分辨率
+    int duty = map(180-angle, 0, 180, 103, 511);  // 12-bit 分辨率
     ledcWrite(leftChannel, duty);
 }
 

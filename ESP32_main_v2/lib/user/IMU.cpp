@@ -25,7 +25,7 @@ void IMU::calibrate(){
         }
     }
     else{
-        unsigned short times = 100;
+        unsigned short times = 200;
         axo = ayo = azo = gxo = gyo = gzo = 0;
 
         for(int i = 0; i < times; i++){
