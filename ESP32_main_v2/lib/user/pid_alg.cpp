@@ -43,6 +43,18 @@ void PIDClass :: pid_seperateI(){
     seperateI = true;
 }
 
+void PIDClass :: pid_setP(float _p){
+    k_p = _p;
+}
+
+void PIDClass :: pid_setI(float _i){
+    k_i = _i;
+}
+
+void PIDClass :: pid_setD(float _d){
+    k_d = _d;
+}
+
 /**
  * @brief Timer elapsed call back function
  */

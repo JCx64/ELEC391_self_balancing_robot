@@ -13,11 +13,41 @@
 
 // Struct Definition
 struct __controlParameter{
-  float p_v ,p_b;
-  float i_v;
-  float d_b;
+  float p_v; //速度环的P
+  float i_v; //速度环的I
+  float p_b; //直立环的P
+  float d_b; //直立环的D
+  float offset_b; //直立环的位移补偿
+  float balanceAngle; //机器的平衡角度
+  float servoAngle; //当前站立角度
+  float moveAngle_forward; //前进时的前倾角度
+  float moveAngle_backward; //后退时的后仰角度
 };
-__controlParameter controlPara;
+__controlParameter ZeroAngle = {
+    .p_v = 160.5,
+    .i_v = 0.6,
+    .p_b = 80,
+    .d_b = 340,
+    .offset_b = 10,
+    .balanceAngle = -2.3,
+    .servoAngle = 0,
+    .moveAngle_forward = -2.3,
+    .moveAngle_backward = 0
+};
+
+__controlParameter FifteenAngle = {
+    .p_v = 160.5,
+    .i_v = 0.6,
+    .p_b = 80,
+    .d_b = 340,
+    .offset_b = 10,
+    .balanceAngle = -2.3,
+    .servoAngle = 0,
+    .moveAngle_forward = -2.3,
+    .moveAngle_backward = 0
+};
+
+__controlParameter *controlPara = &ZeroAngle;
 
 enum __controlState{
  ZERO_ANGLE,
@@ -39,10 +69,11 @@ XboxSeriesXControllerESP32_asukiaaa::Core
 // PID Initialization
 PIDClass robot_velocity_Left_PID(0.3, 0.8, 0, 0, 30, 100, 0.2, 5.f/1000.f);
 PIDClass robot_velocity_Right_PID(0.3, 0.8, 0, 0, 30, 100, 0.2, 5.f/1000.f);
-PIDClass robot_velocity_PID(160.5, 0.60, 0, 0, 500, 1000, 0.2, 5.f/1000.f); //105 //0.15   、、、、0.060  p<80 小车会站不住，一直往一个方向运动
+//105 //0.15   、、、、0.060  p<80 小车会站不住，一直往一个方向运动
+PIDClass robot_velocity_PID(controlPara->p_v, controlPara->i_v, 0, 0, 500, 1000, 0.2, 5.f/1000.f); 
 
 // Variable Initialization
-float  BALANCE_ANGLE, controlBalanceAngle;
+float  BALANCE_ANGLE, static_BalanceAngle;
 float rpm_L, rpm_R;
 int cur_Encoder_Left;
 float last_rpm_L, last_rpm_R;
@@ -53,13 +84,15 @@ bool sendRequest = false;
 bool skipVelocity = false;
 float roll,pitch,yaw;
 uint8_t green = 255;
-bool upOrDown = true;
 String responseBuffer = ""; //用于接收数据
 uint16_t angleLeft = 0;
 unsigned long prev_time_200hz = 0;
 unsigned long prev_time_20hz = 0;
 uint16_t input_move;
 uint8_t input_rotate_L,input_rotate_R;
+bool input_button_L, input_button_R;
+bool isPressed = false;
+bool prev_button_L, prev_button_R = false;
 String xbox_string()
 {
   String str = String(xboxController.xboxNotif.btnY) + "," + // Y: 0/1 bool
@@ -134,10 +167,18 @@ void checkControlState(__controlState cs){
   switch (cs)
   {
   case ZERO_ANGLE:
-    controlPara.p_v = 160.5;
-    controlPara.i_v = 0.60;
+    controlPara = &ZeroAngle;
+    robot_velocity_PID.pid_setP(controlPara->p_v);
+    robot_velocity_PID.pid_setI(controlPara->i_v);
+    BALANCE_ANGLE = controlPara->balanceAngle;
+    static_BalanceAngle = BALANCE_ANGLE;
     break;
   case FIFTEEN_ANGLE:
+    controlPara = &FifteenAngle;
+    robot_velocity_PID.pid_setP(controlPara->p_v);
+    robot_velocity_PID.pid_setI(controlPara->i_v);
+    BALANCE_ANGLE = controlPara->balanceAngle;
+    static_BalanceAngle = BALANCE_ANGLE;
     break;
   default:
     break;
@@ -262,16 +303,17 @@ void setup()
   robot_servo.init();
   moveSpeed = 0.f;
   output_rotate = 0.f;
-  BALANCE_ANGLE = -2.3f; //-1.9f
-  controlBalanceAngle = BALANCE_ANGLE;
+  BALANCE_ANGLE = controlPara->balanceAngle;
+  static_BalanceAngle = BALANCE_ANGLE;
+  controlState = ZERO_ANGLE;
 
   //simulate two pin as i2c SCL and SDA
   pinMode(SIM_SDA_PIN, OUTPUT);
   pinMode(SIM_SCL_PIN, OUTPUT);
   digitalWrite(SIM_SDA_PIN, HIGH);
   digitalWrite(SIM_SCL_PIN, HIGH);
-  robot_servo.setLeftServoAngle(0);
-  robot_servo.setRightServoAngle(0);
+  robot_servo.setLeftServoAngle(controlPara->servoAngle);
+  robot_servo.setRightServoAngle(controlPara->servoAngle);
   delay(4000);
   // 红灯闪两下提示IMU准备初始化
   bool flash = true;
@@ -311,13 +353,94 @@ void loop()
   if(current_time - prev_time_20hz >= 50000){
     xboxController.onLoop();
     if(xboxController.isConnected()){
-        input_move = xboxController.xboxNotif.joyLVert;
-        input_rotate_L = xboxController.xboxNotif.trigLT;
-        input_rotate_R = xboxController.xboxNotif.trigRT;
-        trigger_vibration_press_ctrl();
+      input_move = xboxController.xboxNotif.joyLVert;
+      input_rotate_L = xboxController.xboxNotif.trigLT;
+      input_rotate_R = xboxController.xboxNotif.trigRT;
+      input_button_L = xboxController.xboxNotif.btnLB;
+      input_button_R = xboxController.xboxNotif.btnRB;
+      trigger_vibration_press_ctrl();
+      //左右没有同时按下
+      if(!input_button_L || !input_button_R)
+      {
+        //左键状态改变
+        if(input_button_L != prev_button_L){
+          //如果之前是按下了，那现在就是松开
+          if(isPressed){
+            isPressed = false;
+            controlState = ZERO_ANGLE;
+          }
+          //如果之前是松开，现在是按下
+          else{
+            isPressed = true;
+          }
+        }
+        prev_button_L = input_button_L;
+
+        //右键键状态改变
+        if(input_button_R != prev_button_R){
+          //如果之前是按下了，那现在就是松开
+          if(isPressed){
+            isPressed = false;
+            controlState = FIFTEEN_ANGLE;
+          }
+          //如果之前是松开，现在是按下
+          else{
+            isPressed = true;
+          }
+        }
+        prev_button_R = input_button_R;
+      }
+      checkControlState(controlState);
+      // 左右同时按下
+      if(input_rotate_R != 0 && input_rotate_L !=0){
+        skipVelocity = false;
+        if(abs(output_rotate) > 0.01f)
+          output_rotate = output_rotate + 0.1*(0.f - output_rotate);
+      }
+      // 右边按下
+      else if(input_rotate_R != 0){
+        output_rotate = -35.f;
+        robot_servo.setLeftServoAngle(controlPara->servoAngle+10);
+        skipVelocity = true;
+      }
+      // 左边按下
+      else if(input_rotate_L != 0){
+        output_rotate = 35.f;
+        robot_servo.setRightServoAngle(controlPara->servoAngle+10);
+        skipVelocity = true;
+      }
+      // 两边都不按
+      else{
+        skipVelocity = false;
+        robot_servo.setLeftServoAngle(controlPara->servoAngle);
+        robot_servo.setRightServoAngle(controlPara->servoAngle);
+        if(abs(output_rotate) > 0.01f)
+        output_rotate = output_rotate + 0.1*(0.f - output_rotate);
+      }
+
+      // 后退
+      if(input_move > 45000){ 
+        moveSpeed = -0.001f;
+        BALANCE_ANGLE = controlPara->moveAngle_backward;
+        skipVelocity = true;
+      }
+      // 前进
+      else if (input_move <25000){
+        skipVelocity = true;
+        moveSpeed = 1.0f;
+      }
+      // 没油门
+      else{
+        skipVelocity = false;
+        if(abs(moveSpeed) > 0.01f)
+          moveSpeed = moveSpeed - 0.1* moveSpeed;
+        if(BALANCE_ANGLE - static_BalanceAngle > 0.01f)
+          BALANCE_ANGLE = BALANCE_ANGLE + 0.5*(static_BalanceAngle - BALANCE_ANGLE);
+      }
     }
     prev_time_20hz = current_time;
   }
+
   else if(current_time - prev_time_200hz >= 5000){
     imu.update();
     imu.getEulerAngles(roll,pitch,yaw);
@@ -331,60 +454,13 @@ void loop()
     rpm_L = 0.125*rpm_L+(1-0.125)*last_rpm_L; 
     rpm_R = 0.125*rpm_R+(1-0.125)*last_rpm_R;
 
-    // 左右同时按下
-    if(input_rotate_R != 0 && input_rotate_L !=0){
-      skipVelocity = false;
-      if(abs(output_rotate) > 0.01f)
-        output_rotate = output_rotate + 0.1*(0.f - output_rotate);
-    }
-    // 右边按下
-    else if(input_rotate_R != 0){
-      output_rotate = -30.f;
-      robot_servo.setLeftServoAngle(10);
-      skipVelocity = true;
-    }
-    // 左边按下
-    else if(input_rotate_L != 0){
-      output_rotate = 30.f;
-      robot_servo.setRightServoAngle(10);
-      skipVelocity = true;
-    }
-    // 两边都不按
-    else{
-      skipVelocity = false;
-      robot_servo.setLeftServoAngle(0);
-      robot_servo.setRightServoAngle(0);
-      if(abs(output_rotate) > 0.01f)
-        output_rotate = output_rotate + 0.1*(0.f - output_rotate);
-    }
-
-    // 后退
-    if(input_move > 45000){ 
-      moveSpeed = -0.001f;
-      BALANCE_ANGLE = 0.f;
-      skipVelocity = true;
-    }
-    // 前进
-    else if (input_move <25000){
-      skipVelocity = true;
-      moveSpeed = 1.0f;
-    }
-    // 没油门
-    else{
-      skipVelocity = false;
-      if(abs(moveSpeed) > 0.01f)
-        moveSpeed = moveSpeed - 0.1* moveSpeed;
-      if(BALANCE_ANGLE - controlBalanceAngle > 0.01f)
-        BALANCE_ANGLE = BALANCE_ANGLE + 0.5*(controlBalanceAngle - BALANCE_ANGLE);
-    }
-
     float angle_error = pitch-BALANCE_ANGLE;
     float angle_velocity = imu.getPitchAngularVelocity();
     if(abs(angle_error)<0.3f)
       angle_error = 0;
     if(abs(angle_velocity)<0.08f)
       angle_velocity = 0;
-    float output_balance = 0.6f * (80.f * angle_error + 340.f * angle_velocity) + 10.f; //78 220
+    float output_balance = 0.6f * (controlPara->p_b * angle_error + controlPara->d_b * angle_velocity) + controlPara->offset_b; //78 220
 
     float output_velocity = 0.f;
     if(skipVelocity)
