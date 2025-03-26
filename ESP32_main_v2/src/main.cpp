@@ -29,7 +29,7 @@ PIDClass robot_velocity_PID(138.5, 0.40, 0, 0, 500, 1000, 0.2, 5.f/1000.f); //10
 PIDClass robot_rotate_PID(0, 0, 0, 0, 50, 100, 0.2, 5.f/1000.f); //0.5
 
 // Variable Initialization
-float  BALANCE_ANGLE;
+float  BALANCE_ANGLE, controlBalanceAngle;
 float rpm_L, rpm_R;
 int cur_Encoder_Left;
 float last_rpm_L, last_rpm_R;
@@ -235,16 +235,17 @@ void setup()
   robot_encoder.init();
   robot_servo.init();
   moveSpeed = 0.f;
-  BALANCE_ANGLE = -1.8;
+  BALANCE_ANGLE = -2.5f; //-1.9f
+  controlBalanceAngle = BALANCE_ANGLE;
 
   //simulate two pin as i2c SCL and SDA
   pinMode(SIM_SDA_PIN, OUTPUT);
   pinMode(SIM_SCL_PIN, OUTPUT);
   digitalWrite(SIM_SDA_PIN, HIGH);
   digitalWrite(SIM_SCL_PIN, HIGH);
-  //robot_servo.setLeftServoAngle(0);
-  //robot_servo.setRightServoAngle(0);
-  delay(2000);
+  robot_servo.setLeftServoAngle(0);
+  robot_servo.setRightServoAngle(0);
+  delay(4000);
   // 红灯闪两下提示IMU准备初始化
   bool flash = true;
   for(int i = 0;i<3;i++){
@@ -272,6 +273,8 @@ void setup()
   strip.setPixelColor(0, strip.Color(255, 0, 0));
   strip.show();  
   delay(2000);
+  strip.setPixelColor(0, strip.Color(0, 255, 0));
+  strip.show();
 }
 
 void loop()
@@ -340,8 +343,8 @@ void loop()
       skipVelocity = false;
       if(abs(moveSpeed) > 0.01f)
         moveSpeed = moveSpeed - 0.1* moveSpeed;
-      if(BALANCE_ANGLE + 1.9f > 0.01f)
-        BALANCE_ANGLE = BALANCE_ANGLE - 0.5*(1.9f + BALANCE_ANGLE);
+      if(BALANCE_ANGLE - controlBalanceAngle > 0.01f)
+        BALANCE_ANGLE = BALANCE_ANGLE + 0.5*(controlBalanceAngle - BALANCE_ANGLE);
     }
 
     float angle_error = pitch-BALANCE_ANGLE;
@@ -350,7 +353,7 @@ void loop()
       angle_error = 0;
     if(abs(angle_velocity)<0.08f)
       angle_velocity = 0;
-    float output_balance = 0.6f * (48.f * angle_error + 160.f * angle_velocity) + 70.f; //48 158
+    float output_balance = 0.6f * (48.f * angle_error + 215.f * angle_velocity) + 75.f; //48 158
 
     float output_velocity = 0.f;
     if(skipVelocity)
@@ -381,22 +384,22 @@ void loop()
     //Serial.write(tail, sizeof(tail));
 
     //printf("Left: %f Right: %f Angle: %f\n",rpm_L,rpm_R,pitch); 
-    printf("%f\n", angle_velocity);
+    //printf("%f\n", (float)(current_time-prev_time_200hz));
    
     //update prev values
     prev_time_200hz = current_time;
     last_rpm_L = rpm_L;
     last_rpm_R = rpm_R;
 
-    if(upOrDown)
-      green--;
-    else
-      green++;
-    if(green == 255)
-      upOrDown = true;
-    else if(green == 0)
-      upOrDown = false;
-    strip.setPixelColor(0, strip.Color(0, green, 0));
-    strip.show();
+    // if(upOrDown)
+    //   green--;
+    // else
+    //   green++;
+    // if(green == 255)
+    //   upOrDown = true;
+    // else if(green == 0)
+    //   upOrDown = false;
+    // strip.setPixelColor(0, strip.Color(0, green, 0));
+    //strip.show();
   }
 }
