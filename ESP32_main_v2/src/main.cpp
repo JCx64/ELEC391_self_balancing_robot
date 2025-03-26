@@ -11,6 +11,20 @@
 #include "Adafruit_NeoPixel.h"
 #include "servoControl.h"
 
+// Struct Definition
+struct __controlParameter{
+  float p_v ,p_b;
+  float i_v;
+  float d_b;
+};
+__controlParameter controlPara;
+
+enum __controlState{
+ ZERO_ANGLE,
+ FIFTEEN_ANGLE
+};
+__controlState controlState;
+
 // Class Initialization
 IMU imu;
 EncoderClass robot_encoder;
@@ -25,8 +39,7 @@ XboxSeriesXControllerESP32_asukiaaa::Core
 // PID Initialization
 PIDClass robot_velocity_Left_PID(0.3, 0.8, 0, 0, 30, 100, 0.2, 5.f/1000.f);
 PIDClass robot_velocity_Right_PID(0.3, 0.8, 0, 0, 30, 100, 0.2, 5.f/1000.f);
-PIDClass robot_velocity_PID(138.5, 0.40, 0, 0, 500, 1000, 0.2, 5.f/1000.f); //105 //0.15   、、、、0.060  p<80 小车会站不住，一直往一个方向运动
-PIDClass robot_rotate_PID(0, 0, 0, 0, 50, 100, 0.2, 5.f/1000.f); //0.5
+PIDClass robot_velocity_PID(160.5, 0.60, 0, 0, 500, 1000, 0.2, 5.f/1000.f); //105 //0.15   、、、、0.060  p<80 小车会站不住，一直往一个方向运动
 
 // Variable Initialization
 float  BALANCE_ANGLE, controlBalanceAngle;
@@ -115,6 +128,20 @@ void swapEndian(float *f) {
     temp[2] = p[1];
     temp[3] = p[0];
     *f = *(float *)temp;
+}
+
+void checkControlState(__controlState cs){
+  switch (cs)
+  {
+  case ZERO_ANGLE:
+    controlPara.p_v = 160.5;
+    controlPara.i_v = 0.60;
+    break;
+  case FIFTEEN_ANGLE:
+    break;
+  default:
+    break;
+  }
 }
 
 // Xbox functions below
@@ -221,7 +248,6 @@ void trigger_vibration_press_ctrl()
   //delay(50);
 }
 
-
 void setup()
 {
   strip.begin();          // 初始化
@@ -235,7 +261,8 @@ void setup()
   robot_encoder.init();
   robot_servo.init();
   moveSpeed = 0.f;
-  BALANCE_ANGLE = -2.5f; //-1.9f
+  output_rotate = 0.f;
+  BALANCE_ANGLE = -2.3f; //-1.9f
   controlBalanceAngle = BALANCE_ANGLE;
 
   //simulate two pin as i2c SCL and SDA
@@ -313,16 +340,20 @@ void loop()
     // 右边按下
     else if(input_rotate_R != 0){
       output_rotate = -30.f;
+      robot_servo.setLeftServoAngle(10);
       skipVelocity = true;
     }
     // 左边按下
     else if(input_rotate_L != 0){
       output_rotate = 30.f;
+      robot_servo.setRightServoAngle(10);
       skipVelocity = true;
     }
     // 两边都不按
     else{
       skipVelocity = false;
+      robot_servo.setLeftServoAngle(0);
+      robot_servo.setRightServoAngle(0);
       if(abs(output_rotate) > 0.01f)
         output_rotate = output_rotate + 0.1*(0.f - output_rotate);
     }
@@ -330,7 +361,7 @@ void loop()
     // 后退
     if(input_move > 45000){ 
       moveSpeed = -0.001f;
-      BALANCE_ANGLE = 2.f;
+      BALANCE_ANGLE = 0.f;
       skipVelocity = true;
     }
     // 前进
@@ -353,7 +384,7 @@ void loop()
       angle_error = 0;
     if(abs(angle_velocity)<0.08f)
       angle_velocity = 0;
-    float output_balance = 0.6f * (48.f * angle_error + 215.f * angle_velocity) + 75.f; //48 158
+    float output_balance = 0.6f * (80.f * angle_error + 340.f * angle_velocity) + 10.f; //78 220
 
     float output_velocity = 0.f;
     if(skipVelocity)
@@ -362,44 +393,32 @@ void loop()
     robot_velocity_PID.pid_setTarget(moveSpeed);
     output_velocity = robot_velocity_PID.pid_TimerElapsedCallback(velocity_Forward);
 
-    robot_velocity_Left_PID.pid_setTarget(-output_balance + output_velocity);
+    robot_velocity_Left_PID.pid_setTarget(-output_balance+output_velocity);
     float motor_left_velocity = robot_velocity_Left_PID.pid_TimerElapsedCallback(rpm_L);
-    robot_velocity_Right_PID.pid_setTarget(output_balance - output_velocity);
+    robot_velocity_Right_PID.pid_setTarget(output_balance-output_velocity);
     float motor_right_velocity = robot_velocity_Right_PID.pid_TimerElapsedCallback(rpm_R);
 
-    robot_pwm.set_left_pwm(motor_left_velocity + output_rotate);
-    robot_pwm.set_right_pwm(motor_right_velocity + output_rotate);
+    robot_pwm.set_left_pwm(motor_left_velocity+output_rotate);
+    robot_pwm.set_right_pwm(motor_right_velocity+output_rotate);
 
     //send message to vofa
-    float data[1];
-    data[0] = pitch;
-    // data[1] = cur_Encoder_Left;
-    // data[2] = output_balance - output_velocity + output_rotate;
-    // data[3] = rpm_R;
+    float data[3];
+    data[0] = motor_left_velocity;
+    data[1] = motor_right_velocity;
+    data[2] = pitch;
     uint8_t tail[4] = {0x00, 0x00, 0x80, 0x7F};  // JustFloat 帧尾
 
     //发送 float 数据
-    //Serial.write((uint8_t*)data, sizeof(data));
+    Serial.write((uint8_t*)data, sizeof(data));
     //发送 JustFloat 帧尾
-    //Serial.write(tail, sizeof(tail));
+    Serial.write(tail, sizeof(tail));
 
-    //printf("Left: %f Right: %f Angle: %f\n",rpm_L,rpm_R,pitch); 
+    // printf("Left: %f Right: %f Angle: %f\n",rpm_L,rpm_R,pitch); 
     //printf("%f\n", (float)(current_time-prev_time_200hz));
    
     //update prev values
     prev_time_200hz = current_time;
     last_rpm_L = rpm_L;
     last_rpm_R = rpm_R;
-
-    // if(upOrDown)
-    //   green--;
-    // else
-    //   green++;
-    // if(green == 255)
-    //   upOrDown = true;
-    // else if(green == 0)
-    //   upOrDown = false;
-    // strip.setPixelColor(0, strip.Color(0, green, 0));
-    //strip.show();
   }
 }
