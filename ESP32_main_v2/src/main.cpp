@@ -40,9 +40,9 @@ __controlParameter FifteenAngle = {
     .i_v = 0.6,
     .p_b = 80,
     .d_b = 340,
-    .offset_b = 10,
-    .balanceAngle = -2.3,
-    .servoAngle = 0,
+    .offset_b = 70,
+    .balanceAngle = -4.0,
+    .servoAngle = 15,
     .moveAngle_forward = -2.3,
     .moveAngle_backward = 0
 };
@@ -93,6 +93,7 @@ uint8_t input_rotate_L,input_rotate_R;
 bool input_button_L, input_button_R;
 bool isPressed = false;
 bool prev_button_L, prev_button_R = false;
+
 String xbox_string()
 {
   String str = String(xboxController.xboxNotif.btnY) + "," + // Y: 0/1 bool
@@ -399,14 +400,20 @@ void loop()
       }
       // 右边按下
       else if(input_rotate_R != 0){
-        output_rotate = -35.f;
-        robot_servo.setLeftServoAngle(controlPara->servoAngle+10);
+        output_rotate = -45.f;
+        if(controlState == ZERO_ANGLE)
+          robot_servo.setLeftServoAngle(controlPara->servoAngle+15);
+        else
+          robot_servo.setRightServoAngle(controlPara->servoAngle-15);
         skipVelocity = true;
       }
       // 左边按下
       else if(input_rotate_L != 0){
-        output_rotate = 35.f;
-        robot_servo.setRightServoAngle(controlPara->servoAngle+10);
+        output_rotate = 45.f;
+        if(controlState == ZERO_ANGLE)
+          robot_servo.setRightServoAngle(controlPara->servoAngle+15);
+        else
+          robot_servo.setLeftServoAngle(controlPara->servoAngle-15);
         skipVelocity = true;
       }
       // 两边都不按
@@ -485,12 +492,12 @@ void loop()
     uint8_t tail[4] = {0x00, 0x00, 0x80, 0x7F};  // JustFloat 帧尾
 
     //发送 float 数据
-    Serial.write((uint8_t*)data, sizeof(data));
+    //Serial.write((uint8_t*)data, sizeof(data));
     //发送 JustFloat 帧尾
-    Serial.write(tail, sizeof(tail));
+    //Serial.write(tail, sizeof(tail));
 
     // printf("Left: %f Right: %f Angle: %f\n",rpm_L,rpm_R,pitch); 
-    //printf("%f\n", (float)(current_time-prev_time_200hz));
+    printf("time = %f Balance Angle = %f\n", (float)(current_time-prev_time_200hz),BALANCE_ANGLE);
    
     //update prev values
     prev_time_200hz = current_time;
