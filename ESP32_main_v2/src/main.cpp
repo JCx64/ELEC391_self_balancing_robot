@@ -20,8 +20,12 @@ struct __controlParameter{
   float offset_b; //直立环的位移补偿
   float balanceAngle; //机器的平衡角度
   float servoAngle; //当前站立角度
+  float rollAngle; //压弯角度
+  float moveSpeed_forward; //前进时的目标速度
+  float moveSpeed_backward; //后退时的目标速度
   float moveAngle_forward; //前进时的前倾角度
   float moveAngle_backward; //后退时的后仰角度
+  float rotateSpeed; //转向的PWM输出
 };
 __controlParameter ZeroAngle = {
     .p_v = 160.5,
@@ -31,20 +35,28 @@ __controlParameter ZeroAngle = {
     .offset_b = 10,
     .balanceAngle = -2.3,
     .servoAngle = 0,
+    .rollAngle = 10,
+    .moveSpeed_forward = 1.5,
+    .moveSpeed_backward = -0.003,
     .moveAngle_forward = -2.3,
-    .moveAngle_backward = 0
+    .moveAngle_backward = 0,
+    .rotateSpeed = 30
 };
 
 __controlParameter FifteenAngle = {
     .p_v = 160.5,
     .i_v = 0.6,
-    .p_b = 80,
-    .d_b = 340,
+    .p_b = 85,
+    .d_b = 345,
     .offset_b = 70,
     .balanceAngle = -4.0,
     .servoAngle = 15,
+    .rollAngle = 10,
+    .moveSpeed_forward = 0.8,
+    .moveSpeed_backward = -0.003,
     .moveAngle_forward = -2.3,
-    .moveAngle_backward = 0
+    .moveAngle_backward = -0.5,
+    .rotateSpeed = 30
 };
 
 __controlParameter *controlPara = &ZeroAngle;
@@ -77,22 +89,25 @@ float  BALANCE_ANGLE, static_BalanceAngle;
 float rpm_L, rpm_R;
 int cur_Encoder_Left;
 float last_rpm_L, last_rpm_R;
+float last_roll;
 volatile int pre_Encoder_Left, pre_Encoder_Right;
 float moveSpeed;
 float output_rotate;
 bool sendRequest = false;
-bool skipVelocity = false;
+bool skipVelocity_rotate, skipVelocity_move = false;
 float roll,pitch,yaw;
 uint8_t green = 255;
 String responseBuffer = ""; //用于接收数据
 uint16_t angleLeft = 0;
 unsigned long prev_time_200hz = 0;
 unsigned long prev_time_20hz = 0;
+unsigned long prev_time_1hz = 0;
 uint16_t input_move;
 uint8_t input_rotate_L,input_rotate_R;
 bool input_button_L, input_button_R;
 bool isPressed = false;
 bool prev_button_L, prev_button_R = false;
+int balanceServoAngle_L,balanceServoAngle_R;
 
 String xbox_string()
 {
@@ -154,6 +169,16 @@ void writeString_2(String stringData){
   }
 }
 
+String readString_2(String stringData){
+  char charData = '\0';
+  while(Serial2.read()!='\n')
+  {
+    stringData += charData;
+    charData = Serial2.read();
+  }
+  return stringData+"\n";
+}
+
 void swapEndian(float *f) {
     uint8_t *p = (uint8_t *)f;
     uint8_t temp[4];
@@ -173,6 +198,8 @@ void checkControlState(__controlState cs){
     robot_velocity_PID.pid_setI(controlPara->i_v);
     BALANCE_ANGLE = controlPara->balanceAngle;
     static_BalanceAngle = BALANCE_ANGLE;
+    balanceServoAngle_L = controlPara->servoAngle;
+    balanceServoAngle_R = controlPara->servoAngle;
     break;
   case FIFTEEN_ANGLE:
     controlPara = &FifteenAngle;
@@ -180,6 +207,8 @@ void checkControlState(__controlState cs){
     robot_velocity_PID.pid_setI(controlPara->i_v);
     BALANCE_ANGLE = controlPara->balanceAngle;
     static_BalanceAngle = BALANCE_ANGLE;
+    balanceServoAngle_L = controlPara->servoAngle;
+    balanceServoAngle_R = controlPara->servoAngle;
     break;
   default:
     break;
@@ -296,9 +325,39 @@ void setup()
   strip.show();           // 清空灯光
   strip.setBrightness(50); // 可调亮度 (0-255)
 
-  Serial.begin(115200);
-  // Serial2.begin(115200, SERIAL_8N1, 9, 10);
 
+  //Serial.begin(115200);
+  Serial2.begin(115200, SERIAL_8N1, 9, 10);
+  //人脸识别
+  String uart2String;
+  // while (true) {
+  //   Serial.print("等待接收\n");
+  //   if (Serial2.available()) {
+  //       uart2String = Serial2.readStringUntil('\n'); // 读取 UART2 数据
+  //       uart2String.trim();  // 去除首尾空格或换行符
+  //       Serial.print("收到: ");
+  //       Serial.println(uart2String);
+  //       if (uart2String == "sjk") {
+  //           Serial.println("识别到 'sjk'，继续执行...");
+  //           break; // 跳出循环，进入主程序
+  //       }
+  //   }
+  // }
+  Serial2.end();
+  //人脸识别结束后 亮红灯
+  strip.setPixelColor(0, strip.Color(255, 0, 0));
+  strip.show();  
+
+  xboxController.begin();
+  while(!xboxController.isConnected()){
+    xboxController.onLoop();
+    delay(500);
+  }
+  //接收到xbox按钮信号后，亮蓝灯
+  strip.setPixelColor(0, strip.Color(0, 0, 255));
+  strip.show();  
+
+  //system start
   robot_pwm.init();
   robot_encoder.init();
   robot_servo.init();
@@ -334,14 +393,6 @@ void setup()
   strip.setPixelColor(0, strip.Color(0, 0, 0));
   strip.show(); 
 
-  xboxController.begin();
-  while(!xboxController.isConnected()){
-    xboxController.onLoop();
-    delay(500);
-  }
-
-  strip.setPixelColor(0, strip.Color(255, 0, 0));
-  strip.show();  
   delay(2000);
   strip.setPixelColor(0, strip.Color(0, 255, 0));
   strip.show();
@@ -351,7 +402,52 @@ void loop()
 {
   unsigned long current_time = micros();
 
-  if(current_time - prev_time_20hz >= 50000){
+  if(current_time - prev_time_1hz >= 100000){
+    // 机器不水平
+    if(abs(roll) > 3){
+      // 机器没在转向
+      if(!skipVelocity_rotate){
+        // 左边低右边
+        if(roll > 0){
+          // 如果之前是右边腿高
+          if(balanceServoAngle_R != controlPara->servoAngle){
+            // 把右边腿收回来
+            balanceServoAngle_R = controlPara->servoAngle;
+          }
+          // 如果左边腿低
+          else{
+             // 从转向压弯状态恢复
+            if(balanceServoAngle_L < controlPara->servoAngle)
+              balanceServoAngle_L = controlPara->servoAngle; 
+            else
+              balanceServoAngle_L = balanceServoAngle_L + 1;
+          }
+        }
+
+        // 右边低左边高
+        else{
+          // 如果之前是左边腿高
+          if(balanceServoAngle_L != controlPara->servoAngle){
+            // 把左边腿收回来
+            balanceServoAngle_L = controlPara->servoAngle;
+          }
+          //如果右边腿低
+          else{
+            // 从转向压弯状态恢复
+            if(balanceServoAngle_R < controlPara->servoAngle)
+              balanceServoAngle_R = controlPara->servoAngle; 
+            else
+              balanceServoAngle_R += 1;
+          }
+        }
+        robot_servo.setRightServoAngle(balanceServoAngle_R);
+        robot_servo.setLeftServoAngle(balanceServoAngle_L);
+      }
+    }
+    printf("Roll Angle = %f L:= %d R:= %d\n",roll,balanceServoAngle_L,balanceServoAngle_R);
+    prev_time_1hz = current_time;
+  }
+  else if(current_time - prev_time_20hz >= 50000){
     xboxController.onLoop();
     if(xboxController.isConnected()){
       input_move = xboxController.xboxNotif.joyLVert;
@@ -360,6 +456,7 @@ void loop()
       input_button_L = xboxController.xboxNotif.btnLB;
       input_button_R = xboxController.xboxNotif.btnRB;
       trigger_vibration_press_ctrl();
+      //---机器高度控制---//
       //左右没有同时按下
       if(!input_button_L || !input_button_R)
       {
@@ -369,6 +466,9 @@ void loop()
           if(isPressed){
             isPressed = false;
             controlState = ZERO_ANGLE;
+            checkControlState(controlState);
+            robot_servo.setLeftServoAngle(controlPara->servoAngle);
+            robot_servo.setRightServoAngle(controlPara->servoAngle);
           }
           //如果之前是松开，现在是按下
           else{
@@ -377,12 +477,15 @@ void loop()
         }
         prev_button_L = input_button_L;
 
-        //右键键状态改变
+        //右键状态改变
         if(input_button_R != prev_button_R){
           //如果之前是按下了，那现在就是松开
           if(isPressed){
             isPressed = false;
             controlState = FIFTEEN_ANGLE;
+            checkControlState(controlState);
+            robot_servo.setLeftServoAngle(controlPara->servoAngle);
+            robot_servo.setRightServoAngle(controlPara->servoAngle);
           }
           //如果之前是松开，现在是按下
           else{
@@ -391,54 +494,64 @@ void loop()
         }
         prev_button_R = input_button_R;
       }
-      checkControlState(controlState);
+      //---机器转向控制---//
       // 左右同时按下
       if(input_rotate_R != 0 && input_rotate_L !=0){
-        skipVelocity = false;
+        skipVelocity_rotate = false;
         if(abs(output_rotate) > 0.01f)
-          output_rotate = output_rotate + 0.1*(0.f - output_rotate);
+          output_rotate = output_rotate + 0.5*(0.f - output_rotate);
       }
       // 右边按下
       else if(input_rotate_R != 0){
-        output_rotate = -45.f;
-        if(controlState == ZERO_ANGLE)
-          robot_servo.setLeftServoAngle(controlPara->servoAngle+15);
-        else
-          robot_servo.setRightServoAngle(controlPara->servoAngle-15);
-        skipVelocity = true;
+        output_rotate = -controlPara->rotateSpeed;
+        if(controlState == ZERO_ANGLE){
+          balanceServoAngle_L = controlPara->servoAngle + controlPara->rollAngle;
+          robot_servo.setLeftServoAngle(balanceServoAngle_L);
+        }
+        else{
+          balanceServoAngle_R = controlPara->servoAngle - controlPara->rollAngle;
+          robot_servo.setRightServoAngle(balanceServoAngle_R);
+        }
+        skipVelocity_rotate = true;
       }
       // 左边按下
       else if(input_rotate_L != 0){
-        output_rotate = 45.f;
-        if(controlState == ZERO_ANGLE)
-          robot_servo.setRightServoAngle(controlPara->servoAngle+15);
-        else
-          robot_servo.setLeftServoAngle(controlPara->servoAngle-15);
-        skipVelocity = true;
+        output_rotate = controlPara->rotateSpeed;
+        if(controlState == ZERO_ANGLE){
+          balanceServoAngle_R = controlPara->servoAngle + controlPara->rollAngle;
+          robot_servo.setRightServoAngle(balanceServoAngle_R);
+        }
+        else{
+          balanceServoAngle_L = controlPara->servoAngle - controlPara->rollAngle;
+          robot_servo.setLeftServoAngle(balanceServoAngle_L);
+        }
+        skipVelocity_rotate = true;
       }
       // 两边都不按
       else{
-        skipVelocity = false;
-        robot_servo.setLeftServoAngle(controlPara->servoAngle);
-        robot_servo.setRightServoAngle(controlPara->servoAngle);
+        skipVelocity_rotate = false;
         if(abs(output_rotate) > 0.01f)
-        output_rotate = output_rotate + 0.1*(0.f - output_rotate);
+          output_rotate = output_rotate + 0.5*(0.f - output_rotate);
       }
-
+      //---机器转向操作---//
       // 后退
       if(input_move > 45000){ 
-        moveSpeed = -0.001f;
+        moveSpeed = controlPara->moveSpeed_backward;
         BALANCE_ANGLE = controlPara->moveAngle_backward;
-        skipVelocity = true;
+        skipVelocity_move = true;
       }
       // 前进
       else if (input_move <25000){
-        skipVelocity = true;
-        moveSpeed = 1.0f;
+        moveSpeed = controlPara->moveSpeed_forward;
+        //存在转向操作
+        if(skipVelocity_rotate)
+          moveSpeed = moveSpeed / 2;
+        else
+          skipVelocity_move = true;
       }
       // 没油门
       else{
-        skipVelocity = false;
+        skipVelocity_move = false;
         if(abs(moveSpeed) > 0.01f)
           moveSpeed = moveSpeed - 0.1* moveSpeed;
         if(BALANCE_ANGLE - static_BalanceAngle > 0.01f)
@@ -447,10 +560,10 @@ void loop()
     }
     prev_time_20hz = current_time;
   }
-
   else if(current_time - prev_time_200hz >= 5000){
     imu.update();
     imu.getEulerAngles(roll,pitch,yaw);
+    roll = 0.125*roll+(1-0.125)*last_roll;
     robot_encoder.update();
     uint16_t cur_Encoder_Left = myi2c.readAS5600Angle();
     
@@ -470,7 +583,7 @@ void loop()
     float output_balance = 0.6f * (controlPara->p_b * angle_error + controlPara->d_b * angle_velocity) + controlPara->offset_b; //78 220
 
     float output_velocity = 0.f;
-    if(skipVelocity)
+    if(skipVelocity_move || skipVelocity_rotate)
       robot_velocity_PID.pid_seperateI();
     float velocity_Forward = 3.1415926f * 0.08f * (rpm_L - rpm_R) / 30.f;
     robot_velocity_PID.pid_setTarget(moveSpeed);
@@ -497,11 +610,12 @@ void loop()
     //Serial.write(tail, sizeof(tail));
 
     // printf("Left: %f Right: %f Angle: %f\n",rpm_L,rpm_R,pitch); 
-    printf("time = %f Balance Angle = %f\n", (float)(current_time-prev_time_200hz),BALANCE_ANGLE);
+    //printf("time = %f Roll Angle = %f L:= %d R:= %d\n", (float)(current_time-prev_time_200hz),roll,balanceServoAngle_L,balanceServoAngle_R);
    
     //update prev values
     prev_time_200hz = current_time;
     last_rpm_L = rpm_L;
     last_rpm_R = rpm_R;
+    last_roll = roll;
   }
 }
