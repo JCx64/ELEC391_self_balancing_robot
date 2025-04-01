@@ -26,39 +26,37 @@ struct __controlParameter{
   float moveSpeed_rotate; //转向时的目标速度
   float moveAngle_forward; //前进时的前倾角度
   float moveAngle_backward; //后退时的后仰角度
-  float rotateSpeed; //转向的PWM输出
 };
 __controlParameter ZeroAngle = {
     .p_v = 205.5, //160.5
     .i_v = 4,
-    .p_b = 80,
-    .d_b = 350,
+    .p_b = 90,//80
+    .d_b = 360,
     .offset_b = 3, // 10
     .balanceAngle = -0.75, //-2.3
     .servoAngle = 0,
     .rollAngle = 10,
-    .moveSpeed_forward = 1.1,
-    .moveSpeed_backward = -1.2,
+    .moveSpeed_forward = 0.8,
+    .moveSpeed_backward = -0.7,
     .moveSpeed_rotate = 40,
     .moveAngle_forward = -0.9,
-    .moveAngle_backward = -0.65,
-    .rotateSpeed = 30
+    .moveAngle_backward = -0.7
 };
 
 __controlParameter FifteenAngle = {
-    .p_v = 160.5,
-    .i_v = 0.6,
-    .p_b = 85,
-    .d_b = 345,
-    .offset_b = 70,
-    .balanceAngle = -4.0,
+    .p_v = 210.5,
+    .i_v = 4,
+    .p_b = 90,
+    .d_b = 365,
+    .offset_b = 3,
+    .balanceAngle = -3,
     .servoAngle = 15,
     .rollAngle = 10,
     .moveSpeed_forward = 0.8,
-    .moveSpeed_backward = -0.003,
-    .moveAngle_forward = -2.3,
-    .moveAngle_backward = -0.5,
-    .rotateSpeed = 30
+    .moveSpeed_backward = -1.5,
+    .moveSpeed_rotate = 40,
+    .moveAngle_forward = -5,
+    .moveAngle_backward = -2.
 };
 
 __controlParameter *controlPara = &ZeroAngle;
@@ -93,7 +91,6 @@ int cur_Encoder_Left;
 float last_rpm_L, last_rpm_R, last_roll;
 volatile int pre_Encoder_Left, pre_Encoder_Right;
 float moveSpeed, rotateSpeed, target_moveSpeed;
-float output_rotate;
 bool sendRequest = false;
 bool skipVelocity_rotate, skipVelocity_move = false;
 float roll,pitch,yaw;
@@ -353,7 +350,6 @@ void setup()
   robot_encoder.init();
   robot_servo.init();
   moveSpeed = 0.f;
-  output_rotate = 0.f;
   BALANCE_ANGLE = controlPara->balanceAngle;
   static_BalanceAngle = BALANCE_ANGLE;
   controlState = ZERO_ANGLE;
@@ -498,14 +494,11 @@ void loop()
       // 左右同时按下
       if(input_rotate_R != 0 && input_rotate_L !=0){
         skipVelocity_rotate = false;
-        if(abs(output_rotate) > 0.1f)
-          output_rotate = output_rotate + 0.5*(0.f - output_rotate);
         if(abs(rotateSpeed) > 0.1f)
           rotateSpeed = rotateSpeed + 0.5*(0.f - rotateSpeed);
       }
       // 右边按下
       else if(input_rotate_R != 0){
-        output_rotate = -controlPara->rotateSpeed;
         rotateSpeed = controlPara->moveSpeed_rotate;
         if(controlState == ZERO_ANGLE){
           balanceServoAngle_L = controlPara->servoAngle + controlPara->rollAngle;
@@ -519,7 +512,6 @@ void loop()
       }
       // 左边按下
       else if(input_rotate_L != 0){
-        output_rotate = controlPara->rotateSpeed;
         rotateSpeed = -controlPara->moveSpeed_rotate;
         if(controlState == ZERO_ANGLE){
           balanceServoAngle_R = controlPara->servoAngle + controlPara->rollAngle;
@@ -534,8 +526,6 @@ void loop()
       // 两边都不按
       else{
         skipVelocity_rotate = false;
-        if(abs(output_rotate) > 0.1f)
-          output_rotate = output_rotate + 0.5*(0.f - output_rotate);
         if(abs(rotateSpeed) > 0.1f)
           rotateSpeed = rotateSpeed + 0.5*(0.f - rotateSpeed);
       }
@@ -592,8 +582,12 @@ void loop()
     float velocity_Forward = 3.1415926f * 0.08f * (rpm_L - rpm_R) / 30.f;
     float _moveSpeed = moveSpeed;
     //存在转向操作
-    if(skipVelocity_rotate)
-        _moveSpeed = _moveSpeed / 2;
+    if(skipVelocity_rotate){
+      if(controlState==ZERO_ANGLE)
+         _moveSpeed = _moveSpeed * 0.8f;
+      else
+        _moveSpeed = _moveSpeed * 0.4f;
+    }
     robot_velocity_PID.pid_setTarget(_moveSpeed);
     output_velocity = robot_velocity_PID.pid_TimerElapsedCallback(velocity_Forward);
 
