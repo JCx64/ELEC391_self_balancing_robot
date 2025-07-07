@@ -6,7 +6,7 @@ H.Chen  contact: huiyuw2@163.com
 
 A.Su &nbsp;&nbsp;&nbsp; contact: su18124968042@163.com
 ## Time (YY/MM/DD)
-2025/1/8 - Now
+2025/1/8 - 2025/04/20
 ## Location
 The University of British Columbia, Vancouver, BC, Canada
 ## Project description
